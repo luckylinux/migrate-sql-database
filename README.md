@@ -59,10 +59,30 @@ Note however that further Investigation is required.
 
 The Options might need to be further tuned once I test with a bigger Database.
 
+# Not Currently Working
+Obviously it's not fully correct, otherwise I wouldn't be seeing a lot of these errors in the `homeassistant-server` Container Logs:
+```
+duplicate key value violates unique constraint "states_pkey"
+```
+
+So there is probably something not working quite right with regards to PostgreSQL UNIQUE Constraint.
+
 # Motivation
 I wanted to save this Script somewhere because I know I will need to convert another Installation of HomeAssistant soon.
 
 And I do NOT think I am the only one facing this issue ...
+
+# Before Migration
+1. Backup
+2. Backup
+3. BACKUP
+
+Once that is done:
+4. Spin up a fresh `postgres` or `timescaledb-ha` Instance.
+5. Configure the `recorder` Section in HomeAssistant `configuration.yaml`
+6. Restart HomeAssistant
+7. Let HomeAssistant Create the Tables in the new Database
+8. Stop the HomeAssistant Container
 
 # Usage
 Clone the Repository
@@ -89,4 +109,3 @@ Run the Migration Script:
 
 # Important
 When using `podman`, do **NOT** use the default `podman` network for either the Destination Database Server (`DATABASE_DESTINATION_HOST`}) otherwise DNS Name Resolution will **NOT** work between the Destination Container and the Migration Containing Script.
-
