@@ -50,15 +50,15 @@ mkdir -p backup/intermediary
 mkdir -p backup/destination
 
 # Generate Networks List for Docker/Podman
-networkstring=()
+#networkstring=()
 #networkstring=(--net ${CONTAINER_NETWORK})
-for net in "${CONTAINER_NETWORK[@]}"
-do
-    networkstring+=(--net ${net})
-
-    # Create Network if Not Exist
-    $engine network create --ignore $net
-done
+#for net in "${CONTAINER_NETWORK[@]}"
+#do
+#    networkstring+=(--net ${net})
+#
+#    # Create Network if Not Exist
+#    $engine network create --ignore $net
+#done
 
 # !! Load Functions AFTER networkstring has been defined !!
 source $toolpath/functions.sh

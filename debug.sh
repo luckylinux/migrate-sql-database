@@ -32,16 +32,16 @@ source $toolpath/functions.sh
 debug=""
 
 # Generate Networks List for Docker/Podman
-networkstring=()
+#networkstring=()
 #networkstring=(--net ${CONTAINER_NETWORK})
-for net in "${CONTAINER_NETWORK[@]}"
-do
-    networkstring+=("--net ${net}")
-
-    # Create Network if Not Exist
-    $engine network create --ignore $net
-done
+#for net in "${CONTAINER_NETWORK[@]}"
+#do
+#    networkstring+=("--network" "${net}")
+#
+#    # Create Network if Not Exist
+#    $engine network create --ignore $net
+#done
 
 # Run Test
-cmd=("psql ${DATABASE_INTERMEDIARY_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}")
+cmd="psql ${DATABASE_INTERMEDIARY_STRING} -c '\l';"
 container_run_migration "psql-test" "postgres:latest" "${cmd}"
