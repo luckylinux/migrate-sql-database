@@ -1,2 +1,31 @@
 # Ignore secrets.sh
 secrets.sh
+
+# Ignore psql/ and ploader/ Folders since they will contain the Database Password
+psql/
+**/psql/
+**/psql/*
+ploader/
+**/ploader/
+**/ploader/*
+
+# Ignore tests
+test/
+**/test/
+**/test/*
+tests/
+**/tests/
+**/tests/*
+
+# Ignore source data
+source/
+**/source/
+**/source/*
+sourcedata/
+**/sourcedata/
+**/sourcedata/*
+
+# Ignore homeassistant temporary data for populating tables
+homeassistant/
+**/homeassistant/
+**/homeassistant/*
