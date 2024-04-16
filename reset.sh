@@ -15,3 +15,19 @@ $compose down
 
 # Remove Data in the test Folder
 sudo rm -rf ./test/containers/data/*
+
+# Stop other Running Processes
+# For a Single Process
+#OLDPROCESS=$(ps aux | grep "/bin/bash ./migrate.sh" | head -1 | awk {'print $2'})
+
+# For Multiple Processes
+mapfile -t OLDPROCESSES < <( ps aux | grep "/bin/bash ./migrate.sh" | grep -v "grep" | awk {'print $2'} )
+
+for oldprocess in "${OLDPROCESSES[@]}"
+do
+   # Echo
+   echo "Kill Unfinished Process $oldprocess"
+
+   # Kill Process
+   kill -9 $oldprocess
+done

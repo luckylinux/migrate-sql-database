@@ -13,8 +13,9 @@ engine=${1-"podman"}
 # Check Engine
 source $toolpath/engine.sh
 
-# Load Functions
-source $toolpath/functions.sh
+# Mount also SourceData inside the Container
+sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
+sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 
 # Disable Debug
 debug=""
@@ -33,26 +34,40 @@ mkdir -p sourcedata
 # Create homeassistant folder if not exist
 mkdir -p homeassistant
 
+# Create a pgloader folder if not exist
+mkdir -p pgloader/source
+mkdir -p pgloader/intermediary
+mkdir -p pgloader/destination
+
+# Create psql folders if not exist
+mkdir -p psql/source
+mkdir -p psql/intermediary
+mkdir -p psql/destination
+
 # Create backup folders if not exist
 mkdir -p backup/source
 mkdir -p backup/intermediary
 mkdir -p backup/destination
 
 # Generate Networks List for Docker/Podman
-networkstring=""
-for net in "${CONTAINER_NETWORK[@]}"
-do
-    networkstring="${networkstring} --net=${net}"
+networkstring="--net ${CONTAINER_NETWORK}"
+#for net in "${CONTAINER_NETWORK[@]}"
+#do
+#    networkstring="${networkstring} --net=${net}"
+#
+#    # Create Network if Not Exist
+#    $engine network create --ignore $net
+#done
 
-    # Create Network if Not Exist
-    $engine network create --ignore $net
-done
+# !! Load Functions AFTER networkstring has been defined !!
+source $toolpath/functions.sh
 
 # Bring Down Containers
+# !! Already done as part of ./reset.sh !!
 #$compose down
 
 # Bring Up Containers
-#$compose up -d
+$compose up -d
 
 
 #####################################################################################
@@ -93,11 +108,23 @@ EOF
 hcreatetablescontainer="homeassistant-create-tables"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_destroy "${hcreatetablescontainer}" "--destroy"
+container_destroy "${hcreatetablescontainer}" "--ignore"
 
 # Create & Run Container Now
 #$engine run --name=${hcreatetablescontainer} -v ./homeassistant/:/config ${networkstring} --network-alias ${hcreatetablescontainer} --pull missing --restart unless-stopped ghcr.io/home-assistant/home-assistant:stable >> homeassistant/${hcreatetablescontainer}.log &
-container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" "" >> homeassistant/${hcreatetablescontainer}.log &
+#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" >> homeassistant/${hcreatetablescontainer}.log &
+#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" >> homeassistant/${hcreatetablescontainer}.log &
+#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable"
+# Wait a bit for Database Tables to be Created
+#sleep 30
+
+# Combined Sleep + Container Execution Command
+#export -f container_run_homeassistant
+#export -f container_run_generic
+#timeout 30 bash -c container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable"
+
+# Must be killed Manually with CTRL + C
+container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" &
 
 # Wait a bit for Database Tables to be Created
 sleep 30
@@ -110,9 +137,6 @@ container_destroy "${hcreatetablescontainer}"
 
 
 
-# Mount also SourceData inside the Container
-sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
-sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 
 # Copy Database Source File to a location accessible by the Container
 # Only Needed if not in this folder or if Volume not mounted within the Container
@@ -194,7 +218,7 @@ pgloadercontainer="pgloader-migration"
 container_destroy "${pgloadercontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pgloadercontainer}" "ghcr.io/dimitri/pgloader:latest" "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
+container_run_migration "${pgloadercontainer}" "${IMAGE_PGLOADER}" "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 #$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 
 # Stop and Remove Container
@@ -210,15 +234,15 @@ pfixcontainer="psql-intermediary-fixes"
 generatedsequencesfix="generated-sequences-fix.sql"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${pfixcontainer}" "--ignore"
+container_destroy "${pfixcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run_migration "${pfixcontainer}" "postgres:latest" "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 #$engine run --name="${pfixcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pfixcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
-container_stop "${pfixcontainer}" "--ignore"
+container_destroy "${pfixcontainer}" "--ignore"
 
 
 #####################################################################################
@@ -252,15 +276,15 @@ timestamp=$(date +"%Y%m%d-%H%M%S")
 pbackupcontainer="psql-intermediary-dump"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${pbackupcontainer}" "--ignore"
+container_destroy "${pbackupcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run "${pbackupcontainer}" "postgres:latest" "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
 #$engine run --name="${pbackupcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pbackupcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
-container_stop "${pbackupcontainer}"
+container_destroy "${pbackupcontainer}"
 
 
 
@@ -270,13 +294,13 @@ container_stop "${pbackupcontainer}"
 pprerestorecontainer="psql-destination-prerestore"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${pprerestorecontainer}" "--ignore"
+container_destroy "${pprerestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run "${pprerestorecontainer}" "postgres:latest" "cd /migration/backup/destination; psql ${DATABASE_INTERMEDIARY_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
+container_run_migration "${pprerestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_INTERMEDIARY_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
 
 # Stop and Remove Container
-container_stop "${pprerestorecontainer}"
+container_destroy "${pprerestorecontainer}"
 
 
 
@@ -286,13 +310,13 @@ container_stop "${pprerestorecontainer}"
 pimportcontainer="psql-destination-import"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${pimportcontainer}" "--ignore"
+container_destroy "${pimportcontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pimportcontainer}" "postgres:latest" "cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pimportcontainer}" "${IMAGE_PSQL}" "cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
-container_stop "${pimportcontainer}" "--ignore"
+container_destroy "${pimportcontainer}" "--ignore"
 
 
 # Step 4. Return TimescaleDB to Normal Operation
@@ -301,13 +325,13 @@ container_stop "${pimportcontainer}" "--ignore"
 ppostrestorecontainer="psql-destination-postrestore"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${ppostrestorecontainer}" "--ignore"
+container_destroy "${ppostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${postrestorecontainer}" "postgres:latest" "cd /migration/backup/intermediary; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
+container_run_migration "${postrestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
 
 # Stop and Remove Container
-container_stop "${ppostrestorecontainer}"
+container_destroy "${ppostrestorecontainer}"
 
 
 # Step 5. Update Table Statistics
@@ -316,10 +340,10 @@ container_stop "${ppostrestorecontainer}"
 panalyzepostrestorecontainer="psql-destination-analyze"
 
 # Stop and Remove Container (if Already Running / Existing)
-container_stop "${panalyzepostrestorecontainer}" "--ignore"
+container_destroy "${panalyzepostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${panalyzepostrestorecontainer}" "postgres:latest" "cd /migration/backup/intermediary; psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
+container_run_migration "${panalyzepostrestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
 
 # Stop and Remove Container
-container_stop "${panalyzepostrestorecontainer}"
+container_destroy "${panalyzepostrestorecontainer}"
