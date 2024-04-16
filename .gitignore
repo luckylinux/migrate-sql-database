@@ -1,6 +1,9 @@
 # Ignore secrets.sh
 secrets.sh
 
+# ignore .env
+.env
+
 # Ignore psql/ and ploader/ Folders since they will contain the Database Password
 psql/
 **/psql/
@@ -29,3 +32,8 @@ sourcedata/
 homeassistant/
 **/homeassistant/
 **/homeassistant/*
+
+# Ignore Backups
+backup/
+**/backup/
+**/backup/*

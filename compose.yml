@@ -22,10 +22,12 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    env_file:
+      - .env
     environment:
-      - POSTGRES_DB=homeassistant
-      - POSTGRES_USER=homeassistant
-      - POSTGRES_PASSWORD=MySuperSecretPassword
+      - POSTGRES_DB=${DATABASE_INTERMEDIARY_DB}
+      - POSTGRES_USER=${DATABASE_INTERMEDIARY_USER}
+      - POSTGRES_PASSWORD=${DATABASE_INTERMEDIARY_PASSWORD}
       #- POSTGRES_HOST_AUTH_METHOD=trust
 
   migration-timescaledb-testing:
@@ -45,16 +47,18 @@ services:
       - database_internal
     volumes:
       - ./test/containers/data/migration-timescaledb-testing:/home/postgres/pgdata/data          # TimescaleDB-HA
-      #- ./test/containers/data/migration-timescaledb-testing:/var/lib/postgresql/data            # !!!! TimescaleDB !!!!
+      #- ./test/containers/data/migration-timescaledb-testing:/var/lib/postgresql/data           # !!!! TimescaleDB !!!!
     healthcheck:
       test: ["CMD", "pg_isready", "-d", "homeassistant", "-U", "homeassistant"]
       interval: 30s
       timeout: 20s
       retries: 3
+    env_file:
+      - .env
     environment:
-      - POSTGRES_DB=homeassistant
-      - POSTGRES_USER=homeassistant
-      - POSTGRES_PASSWORD=MySuperSecretPassword
+      - POSTGRES_DB=${DATABASE_DESTINATION_DB}
+      - POSTGRES_USER=${DATABASE_DESTINATION_USER}
+      - POSTGRES_PASSWORD=${DATABASE_INTERMEDIARY_PASSWORD}
     #  - POSTGRES_HOST_AUTH_METHOD=trust
 
 

@@ -5,30 +5,13 @@ relativepath="./" # Define relative path to go from this script to the root leve
 if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing $scriptpath/$relativepath); fi
 
 # Load Secrets
-source $toolpath/secrets.sh
+source $toolpath/.env
 
 # Override Engine (Docker/Podman)
 engine=${1-"podman"}
 
-# Prefer Podman over Docker
-if [[ -n $(command -v podman) ]] && [[ "$engine" == "podman" ]]
-then
-    # Use Podman to run the image
-    engine="podman"
-
-    # Use podman-compose
-    compose="podman-compose"
-elif [[ -n $(command -v docker) ]] && [[ "$engine" == "docker" ]]
-then
-    # Use Docker to run the image
-    engine="docker"
-
-    # Use docker-compose
-    compose="docker-compose"
-else
-    # Error
-    echo "Neither Podman nor Docker could be found and/or the specified Engine <$engine> was not Found. Aborting !"
-fi
+# Check Engine
+source $toolpath/engine.sh
 
 # Disable Debug
 debug=""
@@ -47,6 +30,11 @@ mkdir -p sourcedata
 # Create homeassistant folder if not exist
 mkdir -p homeassistant
 
+# Create backup folders if not exist
+mkdir -p backup/source
+mkdir -p backup/intermediary
+mkdir -p backup/destination
+
 # Generate Networks List for Docker/Podman
 networkstring=""
 for net in "${CONTAINER_NETWORK[@]}"
@@ -62,6 +50,11 @@ done
 
 # Bring Up Containers
 #$compose up -d
+
+
+#####################################################################################
+################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
+#####################################################################################
 
 # Generate Basic HomeAssistant Configuration
 tee homeassistant/configuration.yaml << EOF
@@ -85,7 +78,7 @@ http:
 
 # Database
 recorder:
-  db_url: postgresql://${DATABASE_DESTINATION_USER}:${DATABASE_DESTINATION_PASSWORD}@${DATABASE_DESTINATION_HOST}:${DATABASE_DESTINATION_PORT}/${DATABASE_DESTINATION_DB}
+  db_url: postgresql://${DATABASE_INTERMEDIARY_USER}:${DATABASE_INTERMEDIARY_PASSWORD}@${DATABASE_INTERMEDIARY_HOST}:${DATABASE_INTERMEDIARY_PORT}/${DATABASE_INTERMEDIARY_DB}
   db_retry_wait: 5 # Wait 5 seconds before retrying
 EOF
 
@@ -114,10 +107,10 @@ sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 #cp ${DATABASE_SOURCE_FILE} source/
 
 # Generate SQL Command File to migrate to PostgreSQL
-tee pgloader/migrate.sql << EOF
+tee pgloader/intermediary/migrate.sql << EOF
 load database
   from ${DATABASE_SOURCE_STRING}
-  into ${DATABASE_DESTINATION_STRING}
+  into ${DATABASE_INTERMEDIARY_STRING}
   with data only, include drop, create tables, drop indexes, truncate, batch rows = 1000
   SET work_mem to '64 MB', maintenance_work_mem to '512 MB'
 ;
@@ -126,7 +119,7 @@ EOF
 # Generate SQL Fix Command File
 # Maybe Valid for Version 16 Only ?
 # Source: https://wiki.postgresql.org/wiki/Fixing_Sequences
-tee psql/fix-sequences.sql << EOF
+tee psql/intermediary/fix-sequences.sql << EOF
 SELECT 
     'SELECT SETVAL(' ||
        quote_literal(quote_ident(sequence_namespace.nspname) || '.' || quote_ident(class_sequence.relname)) ||
@@ -151,7 +144,7 @@ EOF
 # Generate SQL Fix Command File
 # Maybe Valid for Version 14-15 ?
 # Source: https://writech.run/blog/how-to-fix-sequence-out-of-sync-postgresql/
-#tee psql/fix-sequences.sql << EOF
+#tee psql/intermediary/fix-sequences.sql << EOF
 #SELECT 'SELECT SETVAL(' ||
 #       quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
 #       ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
@@ -171,16 +164,15 @@ EOF
 #EOF
 
 
-#tee psql/fix-other.sql << EOF
+# Other Required Fixes
+#tee psql/intermediary/fix-other.sql << EOF
 #
 #EOF
 
-# Generate TimescaleDB Conversion Command File
 
 
 # Execute pgloader Using Docker
 # Documentation: https://pgloader.readthedocs.io/en/latest/tutorial/tutorial.html
-#$engine run -v "./:/migration" "${networkstring}" --rm -it ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/migrate.sql"
 pgloadercontainer="pgloader-migration"
 
 # Stop and Remove Container (if Already Running / Existing)
@@ -188,7 +180,7 @@ $engine stop --ignore ${pgloadercontainer}
 $engine rm --ignore ${pgloadercontainer}
 
 # Create & Run Container Now
-$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/migrate.sql; ${debug}"
+$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 
 # Stop and Remove Container
 $engine stop ${pgloadercontainer}
@@ -196,17 +188,92 @@ $engine rm ${pgloadercontainer}
 
 # Execute psql Using Docker
 # No Official psql Image is available so just run another PostgreSQL Server Instance
-psqlcontainer="psql-migration"
+pfixcontainer="psql-intermediary-fixes"
 generatedsequencesfix="generated-sequences-fix.sql"
 
 # Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${pgloadercontainer}
-$engine rm --ignore ${pgloadercontainer}
+$engine stop --ignore ${pfixcontainer}
+$engine rm --ignore ${pfixcontainer}
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-$engine run --name="${psqlcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${psqlcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql; psql -Atq ${DATABASE_DESTINATION_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_DESTINATION_STRING} -f ${generatedsequencesfix}; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
+$engine run --name="${pfixcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pfixcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
-$engine stop ${psqlcontainer}
-$engine rm ${psqlcontainer}
+$engine stop ${pfixcontainer}
+$engine rm ${pfixcontainer}
+
+
+#####################################################################################
+######### PostgreSQL (Intermediary) -> TimescaleDB (Destination) Conversion #########
+#####################################################################################
+# Source https://docs.timescale.com/self-hosted/latest/migration/
+#        - If < 100GB:
+#             - Do Migration at Once: https://docs.timescale.com/self-hosted/latest/migration/entire-database/
+#        - Otherwise:
+#             - Migrate Schema and Tables Separately: https://docs.timescale.com/self-hosted/latest/migration/schema-then-data/
+#             - Live Migration without Intermediary Database: https://docs.timescale.com/self-hosted/latest/migration/same-db/
+#
+#
+# For the Following it is assumed to do Migration at Once (< 100GB)
+
+# Genernate Timestamp both for Backup and Restore Purposes
+timestamp=$(date +"%Y%m%d-%H%M%S")
+
+# Export Intermediary Database
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+pbackupcontainer="psql-intermediary-dump"
+
+# Stop and Remove Container (if Already Running / Existing)
+$engine stop --ignore ${pbackupcontainer}
+$engine rm --ignore ${pbackupxcontainer}
+
+# Create & Run Container Now
+# -Atx or -Atq are common options for the psql command
+$engine run --name="${pbackupcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pbackupcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
+
+# Stop and Remove Container
+$engine stop ${pbackupcontainer}
+$engine rm ${pbackupcontainer}
+
+
+
+# Perform the following Operations:
+# 1. Prepare your Timescale database for data restoration by using timescaledb_pre_restore to stop background workers:
+# 2. Restore the dumped Data
+# 3. At the psql prompt, return your Timescale database to normal operations by using the timescaledb_post_restore command:
+# 4. ANALYZE;
+
+
+# Step 1. - Stop Background Workers
+ppreparecontainer="psql-destination-pre"
+
+
+
+
+# Step 2. - Import dumped Data
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+pimportcontainer="psql-destination-import"
+
+# Stop and Remove Container (if Already Running / Existing)
+$engine stop --ignore ${pimportcontainer}
+$engine rm --ignore ${pimportcontainer}
+
+# Create & Run Container Now
+# -Atx or -Atq are common options for the psql command
+$engine run --name="${pimportcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pimportcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
+
+# Stop and Remove Container
+$engine stop ${pimportcontainer}
+$engine rm ${pimportcontainer}
+
+
+
+
+# Step 3. - Return TimescaleDB to Normal Operation
+
+
+
+
+# Step 4. - Update Table Statistics
+
