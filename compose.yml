@@ -3,26 +3,28 @@ services:
   migration-postgresql-testing:
     container_name: migration-postgresql-testing
     image: ${IMAGE_INTERMEDIARY_DB}
-    hostname: migration-postgresql-testing
+    #hostname: migration-postgresql-testing
     pull_policy: "missing"
     user: "root"
     restart: "unless-stopped"
     # Only need to forward Ports if using the `podman` (default) Network and wanting to connect from the outside World
+    #expose:
+    #  - 5432
     #ports:
     #  - "5432:5432"
     networks:
-      # Only if Ports are Open to the outside World
-      #- podman
-      # For Production with DNS Resolution Enabled
+    #  # Only if Ports are Open to the outside World
+    #  - podman
+    #  # For Production with DNS Resolution Enabled
       - ${CONTAINER_NETWORK}
-      #- database_internal
+    #  #- database_internal
     volumes:
       - ./test/containers/data/migration-postgresql-testing:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "homeassistant", "-U", "homeassistant"]
+      test: ["CMD", "pg_isready", "-d", "${DATABASE_INTERMEDIARY_DB}", "-U", "${DATABASE_INTERMEDIARY_USER}"]
       interval: 30s
       timeout: 20s
-      retries: 3
+      retries: 5
     env_file:
       - .env
     environment:
@@ -34,27 +36,29 @@ services:
   migration-timescaledb-testing:
     container_name: migration-timescaledb-testing
     image: ${IMAGE_DESTINATION_DB}
-    hostname: migration-timescaledb-testing
+    #hostname: migration-timescaledb-testing
     pull_policy: "missing"
     user: "root"
     restart: "unless-stopped"
+    #expose:
+    #  - 5432
     # Only need to forward Ports if using the `podman` (default) Network and wanting to connect from the outside World
     #ports:           
     #  - "5432:5432"
     networks:
-      # Only if Ports are Open to the outside World
-      #- podman
-      # For Production with DNS Resolution Enabled
+    #  # Only if Ports are Open to the outside World
+    #  - podman
+    #  # For Production with DNS Resolution Enabled
       - ${CONTAINER_NETWORK}
-      #- database_internal
+    #  #- database_internal
     volumes:
       - ./test/containers/data/migration-timescaledb-testing:/home/postgres/pgdata/data          # TimescaleDB-HA
       #- ./test/containers/data/migration-timescaledb-testing:/var/lib/postgresql/data           # !!!! TimescaleDB !!!!
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "homeassistant", "-U", "homeassistant"]
+      test: ["CMD", "pg_isready", "-d", "${DATABASE_DESTINATION_DB}", "-U", "${DATABASE_DESTINATION_USER}"]
       interval: 30s
       timeout: 20s
-      retries: 3
+      retries: 5
     env_file:
       - .env
     environment:
@@ -70,10 +74,10 @@ networks:
   #podman:
   #  external: true
   # For ingress HTTPS Proxy
-  database_internal:
-    internal: true # No access to outside
-    external: true # Created externally, not by podman-compose
+  #database_internal:
+  #  internal: true # No access to outside
+  #  external: true # Created externally, not by podman-compose
   # For Internal Communication between HomeAssistant and the Database
-  homeassistant_internal:
-    internal: true # No access to outside
+  homeassistant:
+  #  internal: true # No access to outside
     external: true # Created externally, not by podman-compose

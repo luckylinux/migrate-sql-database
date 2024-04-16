@@ -21,7 +21,7 @@ sudo rm -rf ./test/containers/data/*
 #OLDPROCESS=$(ps aux | grep "/bin/bash ./migrate.sh" | head -1 | awk {'print $2'})
 
 # For Multiple Processes
-mapfile -t OLDPROCESSES < <( ps aux | grep "/bin/bash ./migrate.sh" | grep -v "grep" | awk {'print $2'} )
+mapfile -t OLDPROCESSES < <( ps aux | grep "migrate.sh" | grep -v "grep" | awk {'print $2'} )
 
 for oldprocess in "${OLDPROCESSES[@]}"
 do

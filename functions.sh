@@ -13,11 +13,11 @@ container_destroy() {
    # Stop Container
    $engine stop ${larguments} ${lcontainer}
 
-   # Remove Container
-   $engine rm ${larguments} ${lcontainer}
-
    # Echo
    echo "Removing Container ${lcontainer}"
+
+   # Remove Container
+   $engine rm ${larguments} ${lcontainer}
 }
 
 
@@ -25,12 +25,12 @@ container_run_generic() {
    # Container Name is passed as Argument
    local lcontainer=$1
 
-   # Volumes are passed as Argument as a String
-   local lvolumes=$2
-   echo "Volumes: " ${lvolumes[*]}
-
    # Container Image is passed as Argument
-   local limage=$3
+   local limage=$2
+
+   # Volumes are passed as Argument as a String
+   local lvolumes=$3
+   echo "Volumes: " ${lvolumes[*]}
 
    # Container Command is passed as Argument
    local lcommand=$4
@@ -38,7 +38,12 @@ container_run_generic() {
 
    # Extra Arguments
    local larguments="${@:5}"
-   echo "Extra Arguments: " ${larguments[*]}
+   local lcheckarguments=$(echo ${larguments} | tr -d ' ')
+   echo "Podman Extra Arguments: " ${larguments[*]}
+
+   # Create Network if Not Exist
+   #$engine network create --internal --ignore $net
+   $engine network create --ignore $net
 
    # Define Log Level if not defined yet
    if [[ -z "${loglevel}"  ]]
@@ -53,28 +58,39 @@ container_run_generic() {
    # Handle the case where the command is NOT specified
    if [[ -z "$lcommand" ]]
    then
-      # Run Container
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[@]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" ${larguments[*]}
-      #$engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" "${larguments[*]}"
-      $engine run "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
+      # No Command Provided
+      # Just Use Docker Image Entrypoint
+      if [[ -n "${larguments[*]}" ]]
+      then
+         # Run Container
+         $engine run --rm "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
+      else
+         # Run Container
+         echo "NO ARGUMENTS"
+         $engine run --rm --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
+      fi
    else
-      # Run Container
-      #echo "${networkstring[*]}"
-      #$engine run "${loglevel[*]}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
-      #$engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
-      $engine run "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
+      # A Command was Provided
+      # Run it with bash -c "..."
+      if [[ -n "${larguments[*]}" ]]
+      then
+         # Run Container
+         $engine run --rm "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
+      else
+         # Run Container
+         echo "NO ARGUMENTS"
+         $engine run --rm --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
+      fi
    fi
 
 }
 
 container_run_migration() {
    # Container Name is passed as Argument
-   local lcontainer=$1
+   local lcontainer="$1"
 
    # Container Image is passed as Argument
-   local limage=$2
+   local limage="$2"
 
    # Container Command is passed as Argument
    local lcommand=$3
@@ -97,7 +113,7 @@ container_run_migration() {
    lvolumes+=("-v" "${sourcedatafullpath}:/sourcedata")
 
    # Run Container
-   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "${lcommand[*]}" "${larguments}"
+   container_run_generic "${lcontainer}" "${limage}" "${lvolumes[*]}" "${lcommand[*]}" "${larguments}"
 }
 
 
@@ -121,5 +137,5 @@ container_run_homeassistant() {
    local lvolumes=("-v" "${fullpath}:/config")
 
    # Run Container
-   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "" "${larguments}"
+   container_run_generic "${lcontainer}" "${limage}" "${lvolumes[*]}" "" "${larguments}"
 }

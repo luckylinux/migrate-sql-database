@@ -10,12 +10,18 @@ source $toolpath/.env
 # Override Engine (Docker/Podman)
 engine=${1-"podman"}
 
+# Define Log Level
+loglevel=${2-"info"}
+
 # Check Engine
 source $toolpath/engine.sh
 
 # Mount also SourceData inside the Container
-sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
-sourcedata=$(realpath --canonicalize-missing ${sourcedata})
+#sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
+#sourcedata=$(realpath --canonicalize-missing ${sourcedata})
+
+# Set Delay for Executing Commands to make sure that Networking is Up and Running
+delaycmd="5"
 
 # Disable Debug
 debug=""
@@ -70,13 +76,15 @@ source $toolpath/functions.sh
 # Bring Up Containers
 $compose up -d
 
+# Wait a bit to make sure that Database is Up and Running
+sleep 60
 
 #####################################################################################
 ################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
 #####################################################################################
 
 # Step 1 - Generate Basic HomeAssistant Configuration
-tee homeassistant/configuration.yaml << EOF
+tee homeassistant/configuration.yaml &>/dev/null << EOF
 # Loads default set of integrations. Do not remove.
 default_config:
 
@@ -115,10 +123,13 @@ container_destroy "${hcreatetablescontainer}" "--ignore"
 container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" "-d"
 
 # Wait a bit for Database Tables to be Created
-sleep 30
+sleep 60
+
+# Show logs
+$engine logs "${hcreatetablescontainer}"
 
 # Stop and Remove Container (when working on the Database we MUST AVOID CORRUPTION - If HomeAssistant keeps writing to the Database it WILL GENERATE CORRUPTION)
-container_destroy "${hcreatetablescontainer}"
+container_destroy "${hcreatetablescontainer}" "--ignore"
 
 
 
@@ -128,7 +139,7 @@ container_destroy "${hcreatetablescontainer}"
 #cp ${DATABASE_SOURCE_FILE} source/
 
 # Generate SQL Command File to migrate to PostgreSQL
-tee pgloader/intermediary/migrate.sql << EOF
+tee pgloader/intermediary/migrate.sql &>/dev/null << EOF
 load database
   from ${DATABASE_SOURCE_STRING}
   into ${DATABASE_INTERMEDIARY_STRING}
@@ -140,7 +151,7 @@ EOF
 # Generate SQL Fix Command File
 # Maybe Valid for Version 16 Only ?
 # Source: https://wiki.postgresql.org/wiki/Fixing_Sequences
-tee psql/intermediary/fix-sequences.sql << EOF
+tee psql/intermediary/fix-sequences.sql &>/dev/null << EOF
 SELECT 
     'SELECT SETVAL(' ||
        quote_literal(quote_ident(sequence_namespace.nspname) || '.' || quote_ident(class_sequence.relname)) ||
@@ -165,7 +176,7 @@ EOF
 # Generate SQL Fix Command File
 # Maybe Valid for Version 14-15 ?
 # Source: https://writech.run/blog/how-to-fix-sequence-out-of-sync-postgresql/
-#tee psql/intermediary/fix-sequences.sql << EOF
+#tee psql/intermediary/fix-sequences.sql &>/dev/null << EOF
 #SELECT 'SELECT SETVAL(' ||
 #       quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
 #       ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
@@ -186,7 +197,7 @@ EOF
 
 
 # Other Required Fixes
-#tee psql/intermediary/fix-other.sql << EOF
+#tee psql/intermediary/fix-other.sql &>/dev/null << EOF
 #
 #EOF
 
@@ -203,10 +214,10 @@ pgloadercontainer="pgloader-migration"
 container_destroy "${pgloadercontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pgloadercontainer}" "${IMAGE_PGLOADER}" "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
+container_run_migration "${pgloadercontainer}" "${IMAGE_PGLOADER}" "sleep ${delaycmd}; pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 
 # Stop and Remove Container
-container_destroy "${pgloadercontainer}"
+container_destroy "${pgloadercontainer}" "--ignore"
 
 
 
@@ -222,7 +233,7 @@ container_destroy "${pfixcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pfixcontainer}" "--ignore"
@@ -263,10 +274,10 @@ container_destroy "${pbackupcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
-container_destroy "${pbackupcontainer}"
+container_destroy "${pbackupcontainer}" "--ignore"
 
 
 
@@ -279,10 +290,10 @@ pprerestorecontainer="psql-destination-prerestore"
 container_destroy "${pprerestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pprerestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_INTERMEDIARY_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
+container_run_migration "${pprerestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
 
 # Stop and Remove Container
-container_destroy "${pprerestorecontainer}"
+container_destroy "${pprerestorecontainer}" "--ignore"
 
 
 
@@ -295,7 +306,7 @@ pimportcontainer="psql-destination-import"
 container_destroy "${pimportcontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pimportcontainer}" "${IMAGE_PSQL}" "cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pimportcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pimportcontainer}" "--ignore"
@@ -310,10 +321,10 @@ ppostrestorecontainer="psql-destination-postrestore"
 container_destroy "${ppostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${postrestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
+container_run_migration "${postrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
 
 # Stop and Remove Container
-container_destroy "${ppostrestorecontainer}"
+container_destroy "${ppostrestorecontainer}" "--ignore"
 
 
 # Step 5. Update Table Statistics
@@ -325,7 +336,7 @@ panalyzepostrestorecontainer="psql-destination-analyze"
 container_destroy "${panalyzepostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${panalyzepostrestorecontainer}" "${IMAGE_PSQL}" "psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
+container_run_migration "${panalyzepostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
 
 # Stop and Remove Container
-container_destroy "${panalyzepostrestorecontainer}"
+container_destroy "${panalyzepostrestorecontainer}" "--ignore"

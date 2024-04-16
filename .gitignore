@@ -33,7 +33,13 @@ homeassistant/
 **/homeassistant/
 **/homeassistant/*
 
-# Ignore Backups
+# Ignore Backups Folder
 backup/
 **/backup/
 **/backup/*
+
+# Ignore Build Folder
+build/
+**/build/
+**/build/*
+
