@@ -11,7 +11,7 @@ source $toolpath/.env
 engine=${1-"podman"}
 
 # Define Log Level
-loglevel=${2-"info"}
+loglevel=${2-"error"}
 
 # Check Engine
 source $toolpath/engine.sh
@@ -21,7 +21,7 @@ source $toolpath/engine.sh
 #sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 
 # Set Delay for Executing Commands to make sure that Networking is Up and Running
-delaycmd="5"
+delaycmd="1"
 
 # Disable Debug
 debug=""
@@ -74,10 +74,10 @@ source $toolpath/functions.sh
 #$compose down
 
 # Bring Up Containers
-$compose up -d
+#$compose up -d
 
 # Wait a bit to make sure that Database is Up and Running
-sleep 60
+sleep 5
 
 #####################################################################################
 ################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
@@ -248,7 +248,6 @@ container_destroy "${pfixcontainer}" "--ignore"
 #        - Otherwise:
 #             - Migrate Schema and Tables Separately: https://docs.timescale.com/self-hosted/latest/migration/schema-then-data/
 #             - Live Migration without Intermediary Database: https://docs.timescale.com/self-hosted/latest/migration/same-db/
-#
 #
 # For the Following it is assumed to do Migration at Once (< 100GB)
 
