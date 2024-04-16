@@ -112,7 +112,7 @@ hcreatetablescontainer="homeassistant-create-tables"
 container_destroy "${hcreatetablescontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" &
+container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" "-d"
 
 # Wait a bit for Database Tables to be Created
 sleep 30

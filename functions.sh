@@ -37,30 +37,34 @@ container_run_generic() {
    echo "Command: " ${lcommand[*]}
 
    # Extra Arguments
-   local lextraargs="${@:5}"
+   local larguments="${@:5}"
+   echo "Extra Arguments: " ${larguments[*]}
 
-   # Define Log Level
-   loglevel="error"
-   loglevel="debug"
+   # Define Log Level if not defined yet
+   if [[ -z "${loglevel}"  ]]
+   then
+      loglevel="error"
+      #loglevel="debug"
+   fi
 
    # Echo
    echo "Running Container ${lcontainer}"
-
    # Command String
    # Handle the case where the command is NOT specified
    if [[ -z "$lcommand" ]]
    then
       # Run Container
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[@]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" ${lextraargs[*]}
-      true;
+      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[@]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" ${larguments[*]}
+      #$engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" "${larguments[*]}"
+      $engine run "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
    else
       # Run Container
       #echo "${networkstring[*]}"
-      #$engine run "${loglevel[*]}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${lextraargs[*]}"
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${lextraargs[*]}"
-      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${lextraargs[*]}"
-      #$engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${lextraargs[*]}"
-      $engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}" "${lextraargs[*]}"
+      #$engine run "${loglevel[*]}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
+      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
+      #$engine run ${loglevel[*]} --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
+      #$engine run --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "\"${lcommand[*]}\"" "${larguments[*]}"
+      $engine run "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --network "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
    fi
 
 }
@@ -76,7 +80,7 @@ container_run_migration() {
    local lcommand=$3
 
    # Extra Arguments
-   local lextraargs="${@:4}"
+   local larguments="${@:4}"
 
    # Get full path of base folder
    local basefolderfullpath=$(realpath --canonicalize-missing "./")
@@ -93,7 +97,7 @@ container_run_migration() {
    lvolumes+=("-v" "${sourcedatafullpath}:/sourcedata")
 
    # Run Container
-   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "${lcommand[*]}" "${lextraargs}"
+   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "${lcommand[*]}" "${larguments}"
 }
 
 
@@ -105,10 +109,10 @@ container_run_homeassistant() {
    local limage="$2"
 
    # Container Command is Not Used for HomeAssistant
-   local lcommand=""
+   local lcommand="true;"
 
    # Extra Arguments
-   local lextraargs="${@:3}"
+   local larguments="${@:3}"
 
    # Get full path of homeassistant subfolder
    local fullpath=$(realpath --canonicalize-missing "./homeassistant")
@@ -117,5 +121,5 @@ container_run_homeassistant() {
    local lvolumes=("-v" "${fullpath}:/config")
 
    # Run Container
-   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "${lcommand}" "${lextraargs}"
+   container_run_generic "${lcontainer}" "${lvolumes[*]}" "${limage}" "" "${larguments}"
 }
