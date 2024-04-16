@@ -50,14 +50,15 @@ mkdir -p backup/intermediary
 mkdir -p backup/destination
 
 # Generate Networks List for Docker/Podman
-networkstring="--net ${CONTAINER_NETWORK}"
-#for net in "${CONTAINER_NETWORK[@]}"
-#do
-#    networkstring="${networkstring} --net=${net}"
-#
-#    # Create Network if Not Exist
-#    $engine network create --ignore $net
-#done
+networkstring=()
+#networkstring=(--net ${CONTAINER_NETWORK})
+for net in "${CONTAINER_NETWORK[@]}"
+do
+    networkstring+=(--net ${net})
+
+    # Create Network if Not Exist
+    $engine network create --ignore $net
+done
 
 # !! Load Functions AFTER networkstring has been defined !!
 source $toolpath/functions.sh
@@ -111,19 +112,6 @@ hcreatetablescontainer="homeassistant-create-tables"
 container_destroy "${hcreatetablescontainer}" "--ignore"
 
 # Create & Run Container Now
-#$engine run --name=${hcreatetablescontainer} -v ./homeassistant/:/config ${networkstring} --network-alias ${hcreatetablescontainer} --pull missing --restart unless-stopped ghcr.io/home-assistant/home-assistant:stable >> homeassistant/${hcreatetablescontainer}.log &
-#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" >> homeassistant/${hcreatetablescontainer}.log &
-#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" >> homeassistant/${hcreatetablescontainer}.log &
-#container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable"
-# Wait a bit for Database Tables to be Created
-#sleep 30
-
-# Combined Sleep + Container Execution Command
-#export -f container_run_homeassistant
-#export -f container_run_generic
-#timeout 30 bash -c container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable"
-
-# Must be killed Manually with CTRL + C
 container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" &
 
 # Wait a bit for Database Tables to be Created
@@ -131,9 +119,6 @@ sleep 30
 
 # Stop and Remove Container (when working on the Database we MUST AVOID CORRUPTION - If HomeAssistant keeps writing to the Database it WILL GENERATE CORRUPTION)
 container_destroy "${hcreatetablescontainer}"
-
-
-
 
 
 
@@ -219,7 +204,6 @@ container_destroy "${pgloadercontainer}" "--ignore"
 
 # Create & Run Container Now
 container_run_migration "${pgloadercontainer}" "${IMAGE_PGLOADER}" "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
-#$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pgloadercontainer}"
@@ -239,7 +223,6 @@ container_destroy "${pfixcontainer}" "--ignore"
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
 container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
-#$engine run --name="${pfixcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pfixcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pfixcontainer}" "--ignore"
@@ -281,7 +264,6 @@ container_destroy "${pbackupcontainer}" "--ignore"
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
 container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
-#$engine run --name="${pbackupcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pbackupcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pbackupcontainer}"

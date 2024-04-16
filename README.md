@@ -59,6 +59,12 @@ Note however that further Investigation is required.
 
 The Options might need to be further tuned once I test with a bigger Database.
 
+# Easy Debugging of PostgreSQL Issues
+In case you want to list the Databases on the other running Container you can for instance do:
+```
+source .env; podman run --name="psql-test" --net=${CONTAINER_NETWORK} --network-alias "psql-test" --pull missing --replace --restart no ${IMAGE_PSQL} bash -c "psql ${DATABASE_INTERMEDIARY_STRING} -c '\l'"
+```
+
 # Not Currently Working
 Obviously it's not fully correct, otherwise I wouldn't be seeing a lot of these errors in the `homeassistant-server` Container Logs:
 ```
@@ -84,6 +90,7 @@ SELECT setval(pg_get_serial_sequence('event_data', 'data_id'), coalesce(MAX(data
 SELECT setval(pg_get_serial_sequence('recorder_runs', 'run_id'), coalesce(MAX(run_id), 1)) from recorder_runs;
 SELECT setval(pg_get_serial_sequence('schema_changes', 'change_id'), coalesce(MAX(change_id), 1)) from schema_changes;
 ```
+
 
 
 # Fixing all Sequences with one Script

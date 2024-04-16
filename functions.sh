@@ -23,19 +23,22 @@ container_destroy() {
 
 container_run_generic() {
    # Container Name is passed as Argument
-   local lcontainer="$1"
-
-   # Container Image is passed as Argument
-   local limage="$2"
-
-   # Container Command is passed as Argument
-   local lcommand="$3"
+   local lcontainer=$1
 
    # Volumes are passed as Argument as a String
-   local lvolumes="$4"
+   local lvolumes=$2
+
+   # Container Image is passed as Argument
+   local limage=$3
+
+   # Container Command is passed as Argument
+   local lcommand=$4
 
    # Extra Arguments
    local lextraargs="${@:5}"
+
+   # Define Log Level
+   loglevel=("--log-level=debug")
 
    # Echo
    echo "Running Container ${lcontainer}"
@@ -45,14 +48,20 @@ container_run_generic() {
    if [[ -z "$lcommand" ]]
    then
       #lcommandstr=""
+#      cat <<EOF
+#      Running: $engine run "${loglevel[*]}" --name="${lcontainer}" ${lvolumes[*] "${networkstring[*]}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" ${lextraargs[*]}
+#EOF
 
       # Run Container
-      $engine run --name=${lcontainer} ${lvolumes} ${networkstring} --network-alias ${lcontainer} --pull missing --restart no ${limage} ${lextraargs}
+      $engine run "${loglevel[*]}" --name="${lcontainer}" "${lvolumes[@]}" "${networkstring[*]}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" ${lextraargs[*]}
    else
       #lcommandstr="bash -c "
 
       # Run Container
-      $engine run --name=${lcontainer} ${lvolumes} ${networkstring} --network-alias ${lcontainer} --pull missing --restart no ${limage} bash -c "${lcommand}" ${lextraargs}
+#      cat <<EOF
+#      Running: $engine run "${loglevel[*]}" --name="${lcontainer}" "${lvolumes[*]}" "${networkstring[*]}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}" ${lextraargs[*]}
+#EOF
+      $engine run "${loglevel[*]}" --name="${lcontainer}" "${lvolumes[@]}" "${networkstring[*]}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}" ${lextraargs[*]}
    fi
 
    # Run Container
@@ -61,20 +70,25 @@ container_run_generic() {
 
 container_run_migration() {
    # Container Name is passed as Argument
-   local lcontainer="$1"
+   local lcontainer=$1
 
    # Container Image is passed as Argument
-   local limage="$2"
+   local limage=$2
 
    # Container Command is passed as Argument
-   local lcommand="$3"
+   local lcommand=$3
 
    # Extra Arguments
    local lextraargs="${@:4}"
 
+   # Define Volumes
+   #local lvolumes=("-v ./:/migration -v ${sourcedata}:/sourcedata")
+   local lvolumes=()
+   lvolumes+=(-v "./:/migration")
+   lvolumes+=(-v "${sourcedata}:/sourcedata")
+
    # Run Container
-   container_run_generic "${lcontainer}" "${limage}" "${lcommand}" "-v ./:/migration -v ${sourcedata}:/sourcedata" "${lextraargs}"
-   #$engine run --name="${lcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${lcontainer} --pull missing --restart no ${limage} bash -c "${lcommand}" ${lextraargs}
+   container_run_generic ${lcontainer} ${lvolumes} ${limage} ${lcommand} ${lextraargs}
 }
 
 
@@ -91,6 +105,9 @@ container_run_homeassistant() {
    # Extra Arguments
    local lextraargs="${@:3}"
 
+   # Define Volumes
+   local lvolumes=(-v ./homeassistant/:/config)
+
    # Run Container
-   container_run_generic "${lcontainer}" "${limage}" "${lcommand}" "-v ./homeassistant/:/config" "${lextraargs}"
+   container_run_generic ${lcontainer} ${lvolumes} ${limage} ${lcommand} ${lextraargs}
 }
