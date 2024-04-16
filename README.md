@@ -67,6 +67,44 @@ duplicate key value violates unique constraint "states_pkey"
 
 So there is probably something not working quite right with regards to PostgreSQL UNIQUE Constraint.
 
+This might be related to Sequences that are now out of sync:
+- https://web.archive.org/web/20230928041745/https://arctype.com/blog/postgres-sequence/
+- https://writech.run/blog/how-to-fix-sequence-out-of-sync-postgresql/
+
+# Fixing all Sequences with one Script
+File `fix_sequences.sql`:
+```
+SELECT 'SELECT SETVAL(' ||
+       quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
+       ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
+       quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
+FROM pg_class AS S,
+     pg_depend AS D,
+     pg_class AS T,
+     pg_attribute AS C,
+     pg_tables AS PGT
+WHERE S.relkind = 'S'
+    AND S.oid = D.objid
+    AND D.refobjid = T.oid
+    AND D.refobjid = C.attrelid
+    AND D.refobjsubid = C.attnum
+    AND T.relname = PGT.tablename
+ORDER BY S.relname;
+```
+
+1. Save the query in a fix_sequences.sql file.
+2. Run the query contained in the fix_sequences.sql file and store the result in a temp file. 
+3. Then, run the queries contained in the temp file. 
+4. Finally, delete the temp file.
+
+```
+#!/bin/bash
+
+psql -Atq -f fix_sequences.sql -o temp
+psql -f temp
+rm temp
+```
+
 # Motivation
 I wanted to save this Script somewhere because I know I will need to convert another Installation of HomeAssistant soon.
 
