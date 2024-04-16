@@ -13,6 +13,9 @@ engine=${1-"podman"}
 # Check Engine
 source $toolpath/engine.sh
 
+# Load Functions
+source $toolpath/functions.sh
+
 # Disable Debug
 debug=""
 
@@ -56,7 +59,7 @@ done
 ################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
 #####################################################################################
 
-# Generate Basic HomeAssistant Configuration
+# Step 1 - Generate Basic HomeAssistant Configuration
 tee homeassistant/configuration.yaml << EOF
 # Loads default set of integrations. Do not remove.
 default_config:
@@ -82,21 +85,30 @@ recorder:
   db_retry_wait: 5 # Wait 5 seconds before retrying
 EOF
 
-# Populate Initial Tables with HomeAssistant Container
-populatetablescontainer="homeassistant-populate-tables"
+
+# Step 2 - Let Temporary HomeAssistant Container Create the Database Tables
+# ============================================================================
+
+# Create Initial Tables with HomeAssistant Container
+hcreatetablescontainer="homeassistant-create-tables"
 
 # Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${populatetablescontainer}
-$engine rm --ignore ${populatetablescontainer}
+container_destroy "${hcreatetablescontainer}" "--destroy"
 
 # Create & Run Container Now
-#$engine run -d --name=${populatetablescontainer} -v ./homeassistant/:/config ${networkstring} --network-alias ${populatetablescontainer} --pull missing --restart unless-stopped ghcr.io/home-assistant/home-assistant:stable
-$engine run --name=${populatetablescontainer} -v ./homeassistant/:/config ${networkstring} --network-alias ${populatetablescontainer} --pull missing --restart unless-stopped ghcr.io/home-assistant/home-assistant:stable >> homeassistant/${populatetablescontainer}.log &
+#$engine run --name=${hcreatetablescontainer} -v ./homeassistant/:/config ${networkstring} --network-alias ${hcreatetablescontainer} --pull missing --restart unless-stopped ghcr.io/home-assistant/home-assistant:stable >> homeassistant/${hcreatetablescontainer}.log &
+container_run_homeassistant "${hcreatetablescontainer}" "ghcr.io/home-assistant/home-assistant:stable" "" >> homeassistant/${hcreatetablescontainer}.log &
+
+# Wait a bit for Database Tables to be Created
 sleep 30
 
 # Stop and Remove Container (when working on the Database we MUST AVOID CORRUPTION - If HomeAssistant keeps writing to the Database it WILL GENERATE CORRUPTION)
-$engine stop ${populatetablescontainer}
-$engine rm ${populatetablescontainer}
+container_destroy "${hcreatetablescontainer}"
+
+
+
+
+
 
 # Mount also SourceData inside the Container
 sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
@@ -171,37 +183,42 @@ EOF
 
 
 
+# Step 3. Migrate the Data using pgloader
+# ============================================================================
+
 # Execute pgloader Using Docker
 # Documentation: https://pgloader.readthedocs.io/en/latest/tutorial/tutorial.html
 pgloadercontainer="pgloader-migration"
 
 # Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${pgloadercontainer}
-$engine rm --ignore ${pgloadercontainer}
+container_destroy "${pgloadercontainer}" "--ignore"
 
 # Create & Run Container Now
-$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
+container_run_migration "${pgloadercontainer}" "ghcr.io/dimitri/pgloader:latest" "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
+#$engine run --name="${pgloadercontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pgloadercontainer} --pull missing --restart no ghcr.io/dimitri/pgloader:latest bash -c "pgloader /migration/pgloader/intermediary/migrate.sql; ${debug}"
 
 # Stop and Remove Container
-$engine stop ${pgloadercontainer}
-$engine rm ${pgloadercontainer}
+container_destroy "${pgloadercontainer}"
 
-# Execute psql Using Docker
+
+
+# Step 4. Fix some Stuff by Running SQL Queries using psql
+# ============================================================================
+
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 pfixcontainer="psql-intermediary-fixes"
 generatedsequencesfix="generated-sequences-fix.sql"
 
 # Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${pfixcontainer}
-$engine rm --ignore ${pfixcontainer}
+container_stop "${pfixcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-$engine run --name="${pfixcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pfixcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+container_run_migration "${pfixcontainer}" "postgres:latest" "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+#$engine run --name="${pfixcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pfixcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
-$engine stop ${pfixcontainer}
-$engine rm ${pfixcontainer}
+container_stop "${pfixcontainer}" "--ignore"
 
 
 #####################################################################################
@@ -217,63 +234,92 @@ $engine rm ${pfixcontainer}
 #
 # For the Following it is assumed to do Migration at Once (< 100GB)
 
-# Genernate Timestamp both for Backup and Restore Purposes
-timestamp=$(date +"%Y%m%d-%H%M%S")
-
-# Export Intermediary Database
-# No Official psql Image is available so just run another PostgreSQL Server Instance
-pbackupcontainer="psql-intermediary-dump"
-
-# Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${pbackupcontainer}
-$engine rm --ignore ${pbackupxcontainer}
-
-# Create & Run Container Now
-# -Atx or -Atq are common options for the psql command
-$engine run --name="${pbackupcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pbackupcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
-
-# Stop and Remove Container
-$engine stop ${pbackupcontainer}
-$engine rm ${pbackupcontainer}
-
-
-
 # Perform the following Operations:
-# 1. Prepare your Timescale database for data restoration by using timescaledb_pre_restore to stop background workers:
+# 1. Dump the Intermediary Database
+# 1. Prepare your Timescale Database for data restoration by using timescaledb_pre_restore to stop background workers:
 # 2. Restore the dumped Data
 # 3. At the psql prompt, return your Timescale database to normal operations by using the timescaledb_post_restore command:
 # 4. ANALYZE;
 
-
-# Step 1. - Stop Background Workers
-ppreparecontainer="psql-destination-pre"
-
+# Genernate Timestamp both for Backup and Restore Purposes
+timestamp=$(date +"%Y%m%d-%H%M%S")
 
 
+# Step 1. Backup/Export Intermediary PostgreSQL Database using pg_dump
+# ============================================================================
 
-# Step 2. - Import dumped Data
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+pbackupcontainer="psql-intermediary-dump"
+
+# Stop and Remove Container (if Already Running / Existing)
+container_stop "${pbackupcontainer}" "--ignore"
+
+# Create & Run Container Now
+# -Atx or -Atq are common options for the psql command
+container_run "${pbackupcontainer}" "postgres:latest" "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
+#$engine run --name="${pbackupcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pbackupcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
+
+# Stop and Remove Container
+container_stop "${pbackupcontainer}"
+
+
+
+# Step 2. Stop Background Workers
+# ============================================================================
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+pprerestorecontainer="psql-destination-prerestore"
+
+# Stop and Remove Container (if Already Running / Existing)
+container_stop "${pprerestorecontainer}" "--ignore"
+
+# Create & Run Container Now
+container_run "${pprerestorecontainer}" "postgres:latest" "cd /migration/backup/destination; psql ${DATABASE_INTERMEDIARY_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
+
+# Stop and Remove Container
+container_stop "${pprerestorecontainer}"
+
+
+
+# Step 3. Import dumped Data
+# ============================================================================
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 pimportcontainer="psql-destination-import"
 
 # Stop and Remove Container (if Already Running / Existing)
-$engine stop --ignore ${pimportcontainer}
-$engine rm --ignore ${pimportcontainer}
+container_stop "${pimportcontainer}" "--ignore"
 
 # Create & Run Container Now
-# -Atx or -Atq are common options for the psql command
-$engine run --name="${pimportcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${pimportcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
+container_run_migration "${pimportcontainer}" "postgres:latest" "cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
-$engine stop ${pimportcontainer}
-$engine rm ${pimportcontainer}
+container_stop "${pimportcontainer}" "--ignore"
 
 
+# Step 4. Return TimescaleDB to Normal Operation
+# ============================================================================
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+ppostrestorecontainer="psql-destination-postrestore"
+
+# Stop and Remove Container (if Already Running / Existing)
+container_stop "${ppostrestorecontainer}" "--ignore"
+
+# Create & Run Container Now
+container_run_migration "${postrestorecontainer}" "postgres:latest" "cd /migration/backup/intermediary; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
+
+# Stop and Remove Container
+container_stop "${ppostrestorecontainer}"
 
 
-# Step 3. - Return TimescaleDB to Normal Operation
+# Step 5. Update Table Statistics
+# ============================================================================
+# No Official psql Image is available so just run another PostgreSQL Server Instance
+panalyzepostrestorecontainer="psql-destination-analyze"
 
+# Stop and Remove Container (if Already Running / Existing)
+container_stop "${panalyzepostrestorecontainer}" "--ignore"
 
+# Create & Run Container Now
+container_run_migration "${panalyzepostrestorecontainer}" "postgres:latest" "cd /migration/backup/intermediary; psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
 
-
-# Step 4. - Update Table Statistics
-
+# Stop and Remove Container
+container_stop "${panalyzepostrestorecontainer}"
