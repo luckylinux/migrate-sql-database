@@ -124,24 +124,52 @@ load database
 EOF
 
 # Generate SQL Fix Command File
+# Maybe Valid for Version 16 Only ?
+# Source: https://wiki.postgresql.org/wiki/Fixing_Sequences
 tee psql/fix-sequences.sql << EOF
-SELECT 'SELECT SETVAL(' ||
-       quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
-       ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
-       quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
-FROM pg_class AS S,
-     pg_depend AS D,
-     pg_class AS T,
-     pg_attribute AS C,
-     pg_tables AS PGT
-WHERE S.relkind = 'S'
-    AND S.oid = D.objid
-    AND D.refobjid = T.oid
-    AND D.refobjid = C.attrelid
-    AND D.refobjsubid = C.attnum
-    AND T.relname = PGT.tablename
-ORDER BY S.relname;
+SELECT 
+    'SELECT SETVAL(' ||
+       quote_literal(quote_ident(sequence_namespace.nspname) || '.' || quote_ident(class_sequence.relname)) ||
+       ', COALESCE(MAX(' ||quote_ident(pg_attribute.attname)|| '), 1) ) FROM ' ||
+       quote_ident(table_namespace.nspname)|| '.'||quote_ident(class_table.relname)|| ';'
+FROM pg_depend 
+    INNER JOIN pg_class AS class_sequence
+        ON class_sequence.oid = pg_depend.objid 
+            AND class_sequence.relkind = 'S'
+    INNER JOIN pg_class AS class_table
+        ON class_table.oid = pg_depend.refobjid
+    INNER JOIN pg_attribute 
+        ON pg_attribute.attrelid = class_table.oid
+            AND pg_depend.refobjsubid = pg_attribute.attnum
+    INNER JOIN pg_namespace as table_namespace
+        ON table_namespace.oid = class_table.relnamespace
+    INNER JOIN pg_namespace AS sequence_namespace
+        ON sequence_namespace.oid = class_sequence.relnamespace
+ORDER BY sequence_namespace.nspname, class_sequence.relname;
 EOF
+
+# Generate SQL Fix Command File
+# Maybe Valid for Version 14-15 ?
+# Source: https://writech.run/blog/how-to-fix-sequence-out-of-sync-postgresql/
+#tee psql/fix-sequences.sql << EOF
+#SELECT 'SELECT SETVAL(' ||
+#       quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
+#       ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
+#       quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
+#FROM pg_class AS S,
+#     pg_depend AS D,
+#     pg_class AS T,
+#     pg_attribute AS C,
+#     pg_tables AS PGT
+#WHERE S.relkind = 'S'
+#    AND S.oid = D.objid
+#    AND D.refobjid = T.oid
+#    AND D.refobjid = C.attrelid
+#    AND D.refobjsubid = C.attnum
+#    AND T.relname = PGT.tablename
+#ORDER BY S.relname;
+#EOF
+
 
 #tee psql/fix-other.sql << EOF
 #
@@ -177,7 +205,7 @@ $engine rm --ignore ${pgloadercontainer}
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-$engine run --name="${psqlcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${psqlcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql; psql -Atq ${DATABASE_DESTINATION_STRING} -f ${generatedsequencesfix}; psql -Atq ${DATABASE_DESTINATION_STRING} -f temp ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+$engine run --name="${psqlcontainer}" -v ./:/migration -v ${sourcedata}:/sourcedata ${networkstring} --network-alias ${psqlcontainer} --pull missing --restart no postgres:latest bash -c "cd /migration/psql; psql -Atq ${DATABASE_DESTINATION_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_DESTINATION_STRING} -f ${generatedsequencesfix}; ${debug}" # rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
 $engine stop ${psqlcontainer}
