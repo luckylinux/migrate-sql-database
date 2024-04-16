@@ -321,7 +321,7 @@ ppostrestorecontainer="psql-destination-postrestore"
 container_destroy "${ppostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${postrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
+container_run_migration "${ppostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${ppostrestorecontainer}" "--ignore"

@@ -1,6 +1,45 @@
 #!/bin/bash
 
+container_cmd_generic() {
+   # Container Name is passed as Argument
+   local lcontainer=$1
+
+   # Optional Flags are passed as following Arguments
+   local larguments="${@:2}"
+
+   # 
+
+}
+
 container_destroy() {
+   # Container Name is passed as Argument
+   local lcontainer=$1
+
+   # Optional Flags are passed as following Arguments
+   local larguments="${@:2}"
+
+   # Stop Container
+   container_stop "${lcontainer}" "${larguments}"
+
+   # Remove Container
+   container_remove "${lcontainer}" "${larguments}"
+}
+
+container_remove() {
+   # Container Name is passed as Argument
+   local lcontainer=$1
+
+   # Optional Flags are passed as following Arguments
+   local larguments="${@:2}"
+
+   # Echo
+   echo "Removing Container ${lcontainer}"
+
+   # Remove Container
+   $engine rm ${larguments} ${lcontainer}
+}
+
+container_stop() {
    # Container Name is passed as Argument
    local lcontainer=$1
 
@@ -12,12 +51,6 @@ container_destroy() {
 
    # Stop Container
    $engine stop ${larguments} ${lcontainer}
-
-   # Echo
-   echo "Removing Container ${lcontainer}"
-
-   # Remove Container
-   $engine rm ${larguments} ${lcontainer}
 }
 
 
@@ -42,7 +75,7 @@ container_run_generic() {
    echo "Podman Extra Arguments: " ${larguments[*]}
 
    # Create Network if Not Exist
-   #$engine network create --internal --ignore $net
+   #$engine network create --internal --ignore $net    # !! DOES NOT WORK WITH PGLOADER CONTAINER !!
    $engine network create --ignore $net
 
    # Define Log Level if not defined yet
@@ -109,8 +142,10 @@ container_run_migration() {
    # Define Volumes
    #local lvolumes=("-v ./:/migration -v ${sourcedata}:/sourcedata")
    local lvolumes=()
-   lvolumes+=("-v" "${basefolderfullpath}:/migration")
-   lvolumes+=("-v" "${sourcedatafullpath}:/sourcedata")
+   lvolumes+=("-v")
+   lvolumes+=("${basefolderfullpath}:/migration")
+   lvolumes+=("-v")
+   lvolumes+=("${sourcedatafullpath}:/sourcedata")
 
    # Run Container
    container_run_generic "${lcontainer}" "${limage}" "${lvolumes[*]}" "${lcommand[*]}" "${larguments}"
