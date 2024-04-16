@@ -305,7 +305,7 @@ pimportcontainer="psql-destination-import"
 container_destroy "${pimportcontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pimportcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_restore ${DATABASE_DESTINATION_STRING} --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pimportcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_restore -d '${DATABASE_DESTINATION_STRING}' --no-owner -Fc -v backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pimportcontainer}" "--ignore"

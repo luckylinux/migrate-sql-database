@@ -1,14 +1,14 @@
 #!/bin/bash
 
-container_cmd_generic() {
-   # Container Name is passed as Argument
-   local lcontainer=$1
+exec_cmd() {
+   # Command is passed as argument
+   local lcmd=$1
 
-   # Optional Flags are passed as following Arguments
-   local larguments="${@:2}"
+   # Echo
+   echo "Executing Command: ${lcmd}"
 
-   # 
-
+   # Exec / Eval Command
+   eval $lcmd
 }
 
 container_destroy() {
@@ -63,16 +63,12 @@ container_run_generic() {
 
    # Volumes are passed as Argument as a String
    local lvolumes=$3
-   #echo "Volumes: " ${lvolumes[*]}
 
    # Container Command is passed as Argument
    local lcommand=$4
-   #echo "Command: " ${lcommand[*]}
 
    # Extra Arguments
    local larguments="${@:5}"
-   #local lcheckarguments=$(echo ${larguments} | tr -d ' ')
-   #echo "Podman Extra Arguments: " "${larguments[*]}"
 
    # Create Network if Not Exist
    #$engine network create --internal --ignore $net    # !! DOES NOT WORK WITH PGLOADER CONTAINER !!
@@ -82,39 +78,7 @@ container_run_generic() {
    if [[ -z "${loglevel}"  ]]
    then
       loglevel="error"
-      #loglevel="debug"
    fi
-
-   # Echo
-   #echo "Running Container ${lcontainer}"
-   # Command String
-   # Handle the case where the command is NOT specified
-   #if [[ -z "$lcommand" ]]
-   #then
-   #   # No Command Provided
-   #   # Just Use Docker Image Entrypoint
-   #   if [[ -n "${larguments[*]}" ]]
-   #   then
-   #      # Run Container
-   #      $engine run --rm "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
-   #   else
-   #      # Run Container
-   #      echo "NO ARGUMENTS"
-   #      $engine run --rm --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}"
-   #   fi
-   #else
-   #   # A Command was Provided
-   #   # Run it with bash -c "..."
-   #   if [[ -n "${larguments[*]}" ]]
-   #   then
-   #      # Run Container
-   #      $engine run --rm "${larguments[*]}" --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
-   #   else
-   #      # Run Container
-   #      echo "NO ARGUMENTS"
-   #      $engine run --rm --log-level="${loglevel}" --name="${lcontainer}" ${lvolumes[*]} --net "${CONTAINER_NETWORK}" --network-alias "${lcontainer}" --pull missing --restart no "${limage}" bash -c "${lcommand[*]}"
-   #   fi
-   #fi
 
    # Build List of Arguments for the Left Side
    local largs=()
@@ -147,17 +111,8 @@ container_run_generic() {
    # Build the complete command
    cmd="$engine run ${largs[*]} ${limage} ${rargs[*]}"
 
-   # Execute the command
-   #echo "Executing: " $engine run "${largs[*]}" "${limage}" "${rargs[*]}"
-   #$engine "run" "${largs[*]}" ${lvolumes[*]} "${limage}" bash -c "${lcommand[*]}"
-   #$engine run "${largs[*]}" "${limage}" "${rargs[*]}"
-   #$engine run ${largs[*]} "${limage}" ${rargs[*]}
-
-   # Echo
-   echo "Executing Command: ${cmd}"
-
    # Execute the Command
-   eval $cmd
+   exec_cmd "$cmd"
 }
 
 container_run_migration() {
