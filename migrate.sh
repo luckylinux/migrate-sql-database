@@ -21,7 +21,7 @@ source $toolpath/engine.sh
 #sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 
 # Set Delay for Executing Commands to make sure that Networking is Up and Running
-delaycmd="60"
+delaycmd="15"
 
 # Disable Debug
 debug=""
@@ -125,7 +125,7 @@ container_destroy "${hcreatetablescontainer}" "--ignore"
 container_run_homeassistant "${hcreatetablescontainer}" "${IMAGE_HOMEASSISTANT}" "-d"
 
 # Wait a bit for Database Tables to be Created
-sleep 60
+sleep 30
 
 # Show logs
 $engine logs "${hcreatetablescontainer}"

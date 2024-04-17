@@ -11,3 +11,23 @@ source .env; podman run --rm --name="psql-test" --net=${CONTAINER_NETWORK} --net
 
 
 # !!! MUST USE A NETWORK CREATE with `podman create network XXX` NOT using --internal !!!
+
+#####################################################
+# Run a Container to Troubleshoot Network Issues
+#####################################################
+
+# Attended
+#source .env; podman run --rm --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} -it arunvelsriram/utils bash
+
+# Unattended
+#source .env; podman run -d --rm --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} arunvelsriram/utils bash -c "while [ true ]; do sleep 1; done;"
+
+# Unattended - Catch SIGTERM Correctly
+source .env; podman run -d --replace --rm -v ./loop.sh:/loop.sh --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} arunvelsriram/utils bash -c "/loop.sh"
+######source .env; podman run -d --rm -v ./loop.sh:/loop.sh --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} arunvelsriram/utils bash -c "/loop.sh; echo 'test'"
+
+# Get IP Address of running Container
+#source .env; podman inspect migration-timescaledb-testing --format {{.NetworkSettings.Networks.${CONTAINER_NETWORK}.IPAddress}}
+
+# Get IP address Details of All Containers
+source .env; ./list_ips.sh

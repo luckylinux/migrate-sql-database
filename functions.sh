@@ -94,7 +94,8 @@ container_run_generic() {
    largs+=("${lcontainer}")
    largs+=("--log-level=${loglevel}")
    largs+=("${lvolumes[*]}")
-   largs+=("--network=${CONTAINER_NETWORK}")
+   largs+=("--network={CONTAINER_NETWORK}")
+   #largs+=("--network=${CONTAINER_NETWORK},${CONTAINER_DEFAULT_NETWORK}")   # Does NOT work better ...
    largs+=("--network-alias")
    largs+=("${lcontainer}")
    largs+=("--pull")

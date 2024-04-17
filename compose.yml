@@ -8,13 +8,13 @@ services:
     user: "root"
     restart: "unless-stopped"
     # Only need to forward Ports if using the `podman` (default) Network and wanting to connect from the outside World
-    #expose:
-    #  - 5432
-    #ports:
-    #  - "5432:5432"
+    expose:
+      - 5432
+    ports:
+      - "5433:5432"
     networks:
     #  # Only if Ports are Open to the outside World
-    #  - podman
+    #  - ${CONTAINER_DEFAULT_NETWORK}
     #  # For Production with DNS Resolution Enabled
       - ${CONTAINER_NETWORK}
     #  #- database_internal
@@ -40,14 +40,14 @@ services:
     pull_policy: "missing"
     user: "root"
     restart: "unless-stopped"
-    #expose:
-    #  - 5432
+    expose:
+      - 5432
     # Only need to forward Ports if using the `podman` (default) Network and wanting to connect from the outside World
-    #ports:           
-    #  - "5432:5432"
+    ports:
+      - "5434:5432"
     networks:
     #  # Only if Ports are Open to the outside World
-    #  - podman
+    #  - ${CONTAINER_DEFAULT_NETWORK}
     #  # For Production with DNS Resolution Enabled
       - ${CONTAINER_NETWORK}
     #  #- database_internal
@@ -79,5 +79,5 @@ networks:
   #  external: true # Created externally, not by podman-compose
   # For Internal Communication between HomeAssistant and the Database
   homeassistant:
-  #  internal: true # No access to outside
+    internal: true # No access to outside
     external: true # Created externally, not by podman-compose
