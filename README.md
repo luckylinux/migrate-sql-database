@@ -164,16 +164,24 @@ I wanted to save this Script somewhere because I know I will need to convert ano
 And I do NOT think I am the only one facing this issue :smile:.
 
 # Before Migration
+## Backup
+First and Foremost:
 1. Backup
 2. Backup
-3. BACKUP
+3. Backup
 
-Once that is done:
-4. Spin up a fresh `postgres` or `timescaledb-ha` Instance.
-5. Configure the `recorder` Section in HomeAssistant `configuration.yaml`
-6. Restart HomeAssistant
-7. Let HomeAssistant Create the Tables in the new Database
-8. Stop the HomeAssistant Container
+Did I say BACKUP :smile: ?
+
+## Stop your Current HomeAssistant Instance
+As part of the Migration, this Tool will spin up a fresh HomeAssistant Container, just in order to get the Required SQL Tables Created.
+
+However, First and Foremost, your **Production** HomeAssistant Container **MUST** be stopped !
+
+For instance using `podman-compose`:
+```
+# Stop you HomeAssistant Installation
+podman-compose down
+```
 
 # Usage
 Clone the Repository
@@ -192,7 +200,42 @@ nano secrets.sh
 
 **Important**: for better Control and Stability, it is recommended to PIN a specific TAG for the different Docker/Podman Images. Do NOT use ":latest" !
 
-Run the Migration Script after Ensuring a Clean State:
+# Update the Compose File
+Based on the Examples provided in `.env.example` file, you must now configure **TWO** new Containers.
+
+The first is Temporary (PostgreSQL) in order to handle the first Stage of the Conversion and Fixing the required SQL Tables.
+
+The second one is Permanent (TimescaleDB-HA).
+
+It can be debated what's the most Pratical approach, either one of these can work:
+a. Update you existing `compose.yml` file
+   1. Comment ALL the `homeassistant-server` related lines, to make sure that your original HomeAssistant Container does NOT start to write a handful of Data in the middle of the Database Migration
+   2. Add the lines (based on the example of `.env.example`) for the Temporary PostgreSQL Database Container as well as the TimescaleDB Database Container
+   3. Bring these Containers up with e.g. `podman-compose up -d`
+   4. Set the required Parameters in the `.env` file
+   5. Perform the Migration
+   6. Let the Migration complete without errors - Try again if errors occur
+   7. Uncomment ALL the `homeassistant-server` related lines
+   8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
+   9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
+b. Use the provided `compose.yml` file as part of this Repository
+   1. Select a Permanent Data Location in `compose.yml` which you will later use once the production HomeAssistant Container will be back up Running
+   2. Configure the Required Parameters in `.env` (in particular Container Images and User/Password/Database)
+   3. Bring these containers up with `podman-compose up -d`
+   4. Perform the Migration
+   5. Let the Migration complete without errors - Try again if errors occur
+   6. Copy the relevant Parts of this `compose.yml` file into your production HomeAssistant `compose.yml` file
+   7. Copy the relevant Parts of this `.env` file into your production HomeAssistant `compose.yml` file (or use Secrets, `.env_file` etc)
+   8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
+   9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
+    
+# Run the Migration Script
+Run the Migration Script after Ensuring a Clean State.
+
+IMPORTANT: this will DELETE **ALL** DATA from the Databases when running the Provided "testing" environment (ALL DATA in `./test/containers/data` will be DELETED).
+
+In case of multiple executions of the script due to e.g. Errors occurring, most likely you will have to MANUALLY DELETE ALL DATA of the new PostgreSQL and TailscaleDB-HA Databases, otherwise the Conversion Scripts, the SQL fixes etc will most likely not work correctly.
+
 ```
 ./reset.sh; ./migrate.sh
 ```
