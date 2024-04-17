@@ -24,7 +24,6 @@ source .env; podman run --rm --name="psql-test" --net=${CONTAINER_NETWORK} --net
 
 # Unattended - Catch SIGTERM Correctly
 source .env; podman run -d --replace --rm -v ./loop.sh:/loop.sh --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} arunvelsriram/utils bash -c "/loop.sh"
-######source .env; podman run -d --rm -v ./loop.sh:/loop.sh --name=network-debug-utils --user root --net ${CONTAINER_NETWORK} arunvelsriram/utils bash -c "/loop.sh; echo 'test'"
 
 # Get IP Address of running Container
 #source .env; podman inspect migration-timescaledb-testing --format {{.NetworkSettings.Networks.${CONTAINER_NETWORK}.IPAddress}}
