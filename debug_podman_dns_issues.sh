@@ -7,8 +7,8 @@ relativepath="./" # Define relative path to go from this script to the root leve
 if [[ ! -v toolpath ]]; then scriptpath=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ); toolpath=$(realpath --canonicalize-missing $scriptpath/$relativepath); fi
 
 # Set Secrets and Settings
-CONTAINER_DANGLING_NETWORK="homeassistant_internal"
-CONTAINER_NETWORK="homeassistant"
+CONTAINER_DANGLING_NETWORK="homeassistant"
+CONTAINER_NETWORK="homeassistant_internal"
 POSTGRES_DB="homeassistant"
 POSTGRES_USER="homeassistant"
 POSTGRES_PASSWORD="MySuperSecretPassword"
@@ -41,7 +41,7 @@ podman network create --ignore ${CONTAINER_DANGLING_NETWORK} 1> /dev/null 2> /de
 # Create Target Container
 podman stop --ignore ${targetcontainer} 1> /dev/null 2> /dev/null
 podman rm --ignore ${targetcontainer} 1> /dev/null 2> /dev/null
-podman create --name=${targetcontainer} --env-file ./.env -e POSTGRES_DB=${INTERMEDIARY_DATABASE_DB} -e POSTGRES_USER=${INTERMEDIARY_DATABASE_USER} -e POSTGRES_PASSWORD=${INTERMEDIARY_DATABASE_PASSWORD} -v ./test/containers/data/migration-postgresql-testing:/var/lib/postgresql/data --net ${CONTAINER_NETWORK},${CONTAINER_DANGLING_NETWORK} --network-alias ${targetcontainer} --expose 5432 -p 5433:5432 -u root --pull missing --restart unless-stopped postgres:latest
+podman create --name=${targetcontainer} --env-file ./.env -e POSTGRES_DB=${INTERMEDIARY_DATABASE_DB} -e POSTGRES_USER=${INTERMEDIARY_DATABASE_USER} -e POSTGRES_PASSWORD=${INTERMEDIARY_DATABASE_PASSWORD} -v ./test/containers/data/migration-postgresql-testing:/var/lib/postgresql/data --network=${CONTAINER_NETWORK},${CONTAINER_DANGLING_NETWORK} --network-alias ${targetcontainer} --expose 5432 -p 5433:5432 -u root --pull missing --restart unless-stopped postgres:latest
 
 # Echo
 echo "Start Target Container ${targetcontainer}"
@@ -66,7 +66,7 @@ podman rm --ignore ${targetcontainer} 1> /dev/null 2> /dev/null
 ####podman network rm ${CONTAINER_DANGLING_NETWORK}
 
 # Start Container
-podman create --name=${targetcontainer} --env-file ./.env -e POSTGRES_DB=${INTERMEDIARY_DATABASE_DB} -e POSTGRES_USER=${INTERMEDIARY_DATABASE_USER} -e POSTGRES_PASSWORD=${INTERMEDIARY_DATABASE_PASSWORD} -v ./test/containers/data/migration-postgresql-testing:/var/lib/postgresql/data --net ${CONTAINER_NETWORK} --network-alias ${targetcontainer} --expose 5432 -p 5433:5432 -u root --pull missing --restart unless-stopped postgres:latest
+podman create --name=${targetcontainer} --env-file ./.env -e POSTGRES_DB=${INTERMEDIARY_DATABASE_DB} -e POSTGRES_USER=${INTERMEDIARY_DATABASE_USER} -e POSTGRES_PASSWORD=${INTERMEDIARY_DATABASE_PASSWORD} -v ./test/containers/data/migration-postgresql-testing:/var/lib/postgresql/data --network=${CONTAINER_NETWORK} --network-alias ${targetcontainer} --expose 5432 -p 5433:5432 -u root --pull missing --restart unless-stopped postgres:latest
 
 # Echo
 echo "Start Target Container ${targetcontainer}"

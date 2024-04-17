@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Notes for Passing Arrays / Variable Expension: https://askubuntu.com/questions/674333/how-to-pass-an-array-as-function-argument
+# Array should be the last argument and only one array can be passed
+# Possible Alternatives:
+# - https://stackoverflow.com/questions/10953833/passing-multiple-distinct-arrays-to-a-shell-function
+# - Using an Array of Array maybe ?
+# - https://unix.stackexchange.com/questions/741578/passing-arrays-to-bash-functions
+#
+
 exec_cmd() {
    # Command is passed as argument
    local lcmd=$1
@@ -94,7 +102,7 @@ container_run_generic() {
    largs+=("${lcontainer}")
    largs+=("--log-level=${loglevel}")
    largs+=("${lvolumes[*]}")
-   largs+=("--network={CONTAINER_NETWORK}")
+   largs+=("--network=${CONTAINER_NETWORK}")
    #largs+=("--network=${CONTAINER_NETWORK},${CONTAINER_DEFAULT_NETWORK}")   # Does NOT work better ...
    largs+=("--network-alias")
    largs+=("${lcontainer}")
