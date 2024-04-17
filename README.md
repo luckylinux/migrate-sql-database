@@ -1,8 +1,128 @@
 # Introduction
-Script Configuration to Migrate a [SQLite3] Database to [PostgreSQL].
+Script Configuration to Migrate a [SQLite3] Database to [PostgreSQL]/[TimescaleDB].
 
 # Use Case
 I wanted to convert my HomeAssistant SQLite3 Database to PostgreSQL/TimescaleDB.
+
+# Motivation
+I wanted to save this Script somewhere because I know I will need to convert another Installation of HomeAssistant soon.
+
+And I do NOT think I am the only one facing this issue :smile:.
+
+# Before Migration
+## Backup
+First and Foremost:
+1. Backup
+2. Backup
+3. Backup
+
+Did I say BACKUP :smile: ?
+
+## Stop your Current HomeAssistant Instance
+As part of the Migration, this Tool will spin up a fresh HomeAssistant Container, just in order to get the Required SQL Tables Created.
+
+However, First and Foremost, your **Production** HomeAssistant Container **MUST** be stopped !
+
+For instance using `podman-compose`:
+```
+# Stop you HomeAssistant Installation
+podman-compose down
+```
+
+# Usage
+Clone the Repository
+```
+git clone https://github.com/luckylinux/migrate-sql-database.git
+```
+
+Edit the Configuration File using your preferred Text Editor and set all Options to the desired Values:
+```
+# Copy Example Environment File
+cp .env.example .env
+
+# Edit using nano
+nano secrets.sh 
+```
+
+**Important**: for better Control and Stability, it is recommended to PIN a specific TAG for the different Docker/Podman Images. Do NOT use ":latest" !
+
+# Update the Compose File
+Based on the Examples provided in `.env.example` file, you must now configure **TWO** new Containers.
+
+The first is Temporary (PostgreSQL) in order to handle the first Stage of the Conversion and Fixing the required SQL Tables.
+
+The second one is Permanent (TimescaleDB-HA).
+
+It can be debated what's the most Pratical approach, either one of these can work:
+
+  a. Update you existing `compose.yml` file
+    1. Comment ALL the `homeassistant-server` related lines, to make sure that your original HomeAssistant Container does NOT start to write a handful of Data in the middle of the Database Migration
+    2. Add the lines (based on the example of `.env.example`) for the Temporary PostgreSQL Database Container as well as the TimescaleDB Database Container
+    3. Bring these Containers up with e.g. `podman-compose up -d`
+    4. Set the required Parameters in the `.env` file
+    5. Perform the Migration
+    6. Let the Migration complete without errors - Try again if errors occur
+    7. Uncomment ALL the `homeassistant-server` related lines
+    8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
+    9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
+  b. Use the provided `compose.yml` file as part of this Repository
+    1. Select a Permanent Data Location in `compose.yml` which you will later use once the production HomeAssistant Container will be back up Running
+    2. Configure the Required Parameters in `.env` (in particular Container Images and User/Password/Database)
+    3. Bring these containers up with `podman-compose up -d`
+    4. Perform the Migration
+    5. Let the Migration complete without errors - Try again if errors occur
+    6. Copy the relevant Parts of this `compose.yml` file into your production HomeAssistant `compose.yml` file
+    7. Copy the relevant Parts of this `.env` file into your production HomeAssistant `compose.yml` file (or use Secrets, `.env_file` etc)
+    8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
+    9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
+    
+# Run the Migration Script
+Run the Migration Script after Ensuring a Clean State.
+
+IMPORTANT: this will DELETE **ALL** DATA from the Databases when running the Provided "testing" environment (ALL DATA in `./test/containers/data` will be DELETED).
+
+In case of multiple executions of the script due to e.g. Errors occurring, most likely you will have to MANUALLY DELETE ALL DATA of the new PostgreSQL and TailscaleDB-HA Databases, otherwise the Conversion Scripts, the SQL fixes etc will most likely not work correctly.
+
+```
+./reset.sh; ./migrate.sh
+```
+
+# Important
+When using `podman`, do **NOT** use the default `podman` network for either the Destination Database Server (`DATABASE_DESTINATION_HOST`}) otherwise DNS Name Resolution will **NOT** work between the Destination Container and the Migration Containing Script.
+
+# Issues due to DNS Name Resolution Failure
+See https://github.com/containers/podman/issues/22407 for my Experience. I lost several Days due to this Problem. It's quite Intermittent and difficult to replicate.
+
+On another Note, be aware that the Default `podman` Network does NOT have DNS Resolution Enabled  !!!
+
+Possible Docker has the same / similar Issues.
+
+# Debugging of Networking Issues with the Container
+In case you experience some Network Communication Failures from one Container to the Other, this Docker Image can prove very useful:
+
+Run with:
+```
+podman run -d --rm -v ./loop.sh:/loop.sh --name="${debugcontainer}" --user root --net "${CONTAINER_NETWORK}" arunvelsriram/utils bash -c "/loop.sh"
+```
+
+Then Access it to run the desired Diagnostic (`ping`, `nslookup`, etc):
+```
+podman exec -it ${debugcontainer} /bin/bash
+
+nslookup migration-postgresql-testing
+```
+
+**Note**: for Ping to work correctly, it is MOST LIKELY required to run with --user root. This is particularly the case when running a Podman RootLess Container.
+
+Docker may have similar Issues/Requirements/Features.
+
+# Debugging of PostgreSQL Issues
+In case you want to list the Databases on the other running Container you can for instance do:
+```
+source .env; podman run --name="psql-test" --net=${CONTAINER_NETWORK} --network-alias "psql-test" --pull missing --replace --restart no ${IMAGE_PSQL} bash -c "psql ${DATABASE_INTERMEDIARY_STRING} -c '\l'"
+```
+
+Further Notes available in `easy_debug.sh` and `podman_debug_dns_issues.sh`.
 
 I attempted to follow the instructions in:
 - https://sigfried.be/blog/migrating-home-assistant-sqlite-to-postgresql/
@@ -58,7 +178,6 @@ And specifically I did:
 Note however that further Investigation is required.
 
 The Options might need to be further tuned once I test with a bigger Database.
-
 
 
 # Sequences Issues
@@ -157,125 +276,3 @@ WHERE S.relkind = 'S'
     AND T.relname = PGT.tablename
 ORDER BY S.relname;
 ```
-
-# Motivation
-I wanted to save this Script somewhere because I know I will need to convert another Installation of HomeAssistant soon.
-
-And I do NOT think I am the only one facing this issue :smile:.
-
-# Before Migration
-## Backup
-First and Foremost:
-1. Backup
-2. Backup
-3. Backup
-
-Did I say BACKUP :smile: ?
-
-## Stop your Current HomeAssistant Instance
-As part of the Migration, this Tool will spin up a fresh HomeAssistant Container, just in order to get the Required SQL Tables Created.
-
-However, First and Foremost, your **Production** HomeAssistant Container **MUST** be stopped !
-
-For instance using `podman-compose`:
-```
-# Stop you HomeAssistant Installation
-podman-compose down
-```
-
-# Usage
-Clone the Repository
-```
-git clone https://github.com/luckylinux/migrate-sql-database.git
-```
-
-Edit the Configuration File using your preferred Text Editor and set all Options to the desired Values:
-```
-# Copy Example Environment File
-cp .env.example .env
-
-# Edit using nano
-nano secrets.sh 
-```
-
-**Important**: for better Control and Stability, it is recommended to PIN a specific TAG for the different Docker/Podman Images. Do NOT use ":latest" !
-
-# Update the Compose File
-Based on the Examples provided in `.env.example` file, you must now configure **TWO** new Containers.
-
-The first is Temporary (PostgreSQL) in order to handle the first Stage of the Conversion and Fixing the required SQL Tables.
-
-The second one is Permanent (TimescaleDB-HA).
-
-It can be debated what's the most Pratical approach, either one of these can work:
-a. Update you existing `compose.yml` file
-   1. Comment ALL the `homeassistant-server` related lines, to make sure that your original HomeAssistant Container does NOT start to write a handful of Data in the middle of the Database Migration
-   2. Add the lines (based on the example of `.env.example`) for the Temporary PostgreSQL Database Container as well as the TimescaleDB Database Container
-   3. Bring these Containers up with e.g. `podman-compose up -d`
-   4. Set the required Parameters in the `.env` file
-   5. Perform the Migration
-   6. Let the Migration complete without errors - Try again if errors occur
-   7. Uncomment ALL the `homeassistant-server` related lines
-   8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
-   9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
-b. Use the provided `compose.yml` file as part of this Repository
-   1. Select a Permanent Data Location in `compose.yml` which you will later use once the production HomeAssistant Container will be back up Running
-   2. Configure the Required Parameters in `.env` (in particular Container Images and User/Password/Database)
-   3. Bring these containers up with `podman-compose up -d`
-   4. Perform the Migration
-   5. Let the Migration complete without errors - Try again if errors occur
-   6. Copy the relevant Parts of this `compose.yml` file into your production HomeAssistant `compose.yml` file
-   7. Copy the relevant Parts of this `.env` file into your production HomeAssistant `compose.yml` file (or use Secrets, `.env_file` etc)
-   8. Configure the `recorder` Section in HomeAssistant `configuration.yaml` Configuration File
-   9. Bring your production HomeAssistant Instance back Up with e.g. `podman-compose up -d`
-    
-# Run the Migration Script
-Run the Migration Script after Ensuring a Clean State.
-
-IMPORTANT: this will DELETE **ALL** DATA from the Databases when running the Provided "testing" environment (ALL DATA in `./test/containers/data` will be DELETED).
-
-In case of multiple executions of the script due to e.g. Errors occurring, most likely you will have to MANUALLY DELETE ALL DATA of the new PostgreSQL and TailscaleDB-HA Databases, otherwise the Conversion Scripts, the SQL fixes etc will most likely not work correctly.
-
-```
-./reset.sh; ./migrate.sh
-```
-
-# Issues due to DNS Name Resolution Failure
-See https://github.com/containers/podman/issues/22407 for my Experience. I lost several Days due to this Problem. It's quite Intermittent and difficult to replicate.
-
-On another Note, be aware that the Default `podman` Network does NOT have DNS Resolution Enabled  !!!
-
-Possible Docker has the same / similar Issues.
-
-# Debugging of Networking Issues with the Container
-In case you experience some Network Communication Failures from one Container to the Other, this Docker Image can prove very useful:
-
-Run with:
-```
-podman run -d --rm -v ./loop.sh:/loop.sh --name="${debugcontainer}" --user root --net "${CONTAINER_NETWORK}" arunvelsriram/utils bash -c "/loop.sh"
-```
-
-Then Access it to run the desired Diagnostic (`ping`, `nslookup`, etc):
-```
-podman exec -it ${debugcontainer} /bin/bash
-
-nslookup migration-postgresql-testing
-```
-
-**Note**: for Ping to work correctly, it is MOST LIKELY required to run with --user root. This is particularly the case when running a Podman RootLess Container.
-
-Docker may have similar Issues/Requirements/Features.
-
-# Debugging of PostgreSQL Issues
-In case you want to list the Databases on the other running Container you can for instance do:
-```
-source .env; podman run --name="psql-test" --net=${CONTAINER_NETWORK} --network-alias "psql-test" --pull missing --replace --restart no ${IMAGE_PSQL} bash -c "psql ${DATABASE_INTERMEDIARY_STRING} -c '\l'"
-```
-
-Further Notes available in `easy_debug.sh` and `podman_debug_dns_issues.sh`.
-
-# TODO
-- Implement Docker Container Support (for running from the `pgloader` Container)
-
-# Important
-When using `podman`, do **NOT** use the default `podman` network for either the Destination Database Server (`DATABASE_DESTINATION_HOST`}) otherwise DNS Name Resolution will **NOT** work between the Destination Container and the Migration Containing Script.
