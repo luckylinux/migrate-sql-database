@@ -9,6 +9,9 @@ exec_cmd() {
 
    # Exec / Eval Command
    eval $lcmd
+
+   # Execute using Command
+   #command "$lcmd"
 }
 
 container_destroy() {
@@ -71,8 +74,8 @@ container_run_generic() {
    local larguments="${@:5}"
 
    # Create Network if Not Exist
-   #$engine network create --internal --ignore $net    # !! DOES NOT WORK WITH PGLOADER CONTAINER !!
-   $engine network create --ignore $net
+   #$engine network create --internal --ignore ${CONTAINER_NETWORK}    # !! DOES NOT WORK WITH PGLOADER CONTAINER !!
+   $engine network create --ignore ${CONTAINER_NETWORK}
 
    # Define Log Level if not defined yet
    if [[ -z "${loglevel}"  ]]
@@ -87,10 +90,11 @@ container_run_generic() {
       largs+=("${larguments}")
    fi
    largs+=("--rm")
-   largs+=("--name=${lcontainer}")
+   largs+=("--name")
+   largs+=("${lcontainer}")
    largs+=("--log-level=${loglevel}")
    largs+=("${lvolumes[*]}")
-   largs+=("--net ${CONTAINER_NETWORK}")
+   largs+=("--network=${CONTAINER_NETWORK}")
    largs+=("--network-alias")
    largs+=("${lcontainer}")
    largs+=("--pull")
@@ -106,6 +110,7 @@ container_run_generic() {
       rargs+=("bash")
       rargs+=("-c")
       rargs+=("\"${lcommand[*]}\"")
+      #rargs+=("<<EOF ${lcommand[*]} \nEOF;")
    fi
 
    # Build the complete command
@@ -170,4 +175,11 @@ container_run_homeassistant() {
 
    # Run Container
    container_run_generic "${lcontainer}" "${limage}" "${lvolumes[*]}" "" "${larguments}"
+}
+
+
+section_spacer() {
+   echo "=========================================================================================================================================================="
+   echo "=========================================================================================================================================================="
+   echo "=========================================================================================================================================================="
 }

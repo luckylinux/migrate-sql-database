@@ -31,3 +31,9 @@ do
    # Kill Process
    kill -9 $oldprocess
 done
+
+# Restart Containers
+$compose up -d
+
+# Wait a bit to make sure that Database is Up and Running
+sleep 60

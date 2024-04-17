@@ -21,7 +21,7 @@ source $toolpath/engine.sh
 #sourcedata=$(realpath --canonicalize-missing ${sourcedata})
 
 # Set Delay for Executing Commands to make sure that Networking is Up and Running
-delaycmd="1"
+delaycmd="60"
 
 # Disable Debug
 debug=""
@@ -77,7 +77,7 @@ source $toolpath/functions.sh
 #$compose up -d
 
 # Wait a bit to make sure that Database is Up and Running
-sleep 5
+#sleep 60
 
 #####################################################################################
 ################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
@@ -115,6 +115,8 @@ EOF
 
 # Create Initial Tables with HomeAssistant Container
 hcreatetablescontainer="homeassistant-create-tables"
+
+section_spacer "${hcreatetablescontainer}"
 
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${hcreatetablescontainer}" "--ignore"
@@ -210,6 +212,9 @@ EOF
 # Documentation: https://pgloader.readthedocs.io/en/latest/tutorial/tutorial.html
 pgloadercontainer="pgloader-migration"
 
+
+section_spacer "${pgloadercontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${pgloadercontainer}" "--ignore"
 
@@ -228,12 +233,14 @@ container_destroy "${pgloadercontainer}" "--ignore"
 pfixcontainer="psql-intermediary-fixes"
 generatedsequencesfix="generated-sequences-fix.sql"
 
+section_spacer "${pfixcontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${pfixcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/psql/intermediary; psql -Atq ${DATABASE_INTERMEDIARY_STRING} -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
+container_run_migration "${pfixcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/psql/intermediary; psql -Atq -d '${DATABASE_INTERMEDIARY_STRING}' -f fix-sequences.sql -o ${generatedsequencesfix}; psql -Atx ${DATABASE_INTERMEDIARY_STRING} -f ${generatedsequencesfix}; rm ${generatedsequencesfix}; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pfixcontainer}" "--ignore"
@@ -268,12 +275,14 @@ timestamp=$(date +"%Y%m%d-%H%M%S")
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 pbackupcontainer="psql-intermediary-dump"
 
+section_spacer "${pbackupcontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${pbackupcontainer}" "--ignore"
 
 # Create & Run Container Now
 # -Atx or -Atq are common options for the psql command
-container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_dump ${DATABASE_INTERMEDIARY_STRING} -Fc -v -f backup-${timestamp}.dump; ${debug}"
+container_run_migration "${pbackupcontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; cd /migration/backup/intermediary; pg_dump -d '${DATABASE_INTERMEDIARY_STRING}' -Fc -v -f backup-${timestamp}.dump; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pbackupcontainer}" "--ignore"
@@ -285,11 +294,13 @@ container_destroy "${pbackupcontainer}" "--ignore"
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 pprerestorecontainer="psql-destination-prerestore"
 
+section_spacer "${pprerestorecontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${pprerestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${pprerestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_pre_restore();'; ${debug}"
+container_run_migration "${pprerestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql -d '${DATABASE_DESTINATION_STRING}' -c 'SELECT timescaledb_pre_restore();'; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${pprerestorecontainer}" "--ignore"
@@ -300,6 +311,9 @@ container_destroy "${pprerestorecontainer}" "--ignore"
 # ============================================================================
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 pimportcontainer="psql-destination-import"
+
+section_spacer "${pimportcontainer}"
+
 
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${pimportcontainer}" "--ignore"
@@ -316,11 +330,13 @@ container_destroy "${pimportcontainer}" "--ignore"
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 ppostrestorecontainer="psql-destination-postrestore"
 
+section_spacer "${ppostrestorecontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${ppostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${ppostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'SELECT timescaledb_post_restore();'; ${debug}"
+container_run_migration "${ppostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql -d '${DATABASE_DESTINATION_STRING}' -c 'SELECT timescaledb_post_restore();'; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${ppostrestorecontainer}" "--ignore"
@@ -331,11 +347,13 @@ container_destroy "${ppostrestorecontainer}" "--ignore"
 # No Official psql Image is available so just run another PostgreSQL Server Instance
 panalyzepostrestorecontainer="psql-destination-analyze"
 
+section_spacer "${panalyzepostrestorecontainer}"
+
 # Stop and Remove Container (if Already Running / Existing)
 container_destroy "${panalyzepostrestorecontainer}" "--ignore"
 
 # Create & Run Container Now
-container_run_migration "${panalyzepostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql ${DATABASE_DESTINATION_STRING} -c 'ANALYZE;'; ${debug}"
+container_run_migration "${panalyzepostrestorecontainer}" "${IMAGE_PSQL}" "sleep ${delaycmd}; psql -d '${DATABASE_DESTINATION_STRING}' -c 'ANALYZE;'; ${debug}"
 
 # Stop and Remove Container
 container_destroy "${panalyzepostrestorecontainer}" "--ignore"
