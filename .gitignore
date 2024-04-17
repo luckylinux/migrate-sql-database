@@ -8,9 +8,9 @@ secrets.sh
 psql/
 **/psql/
 **/psql/*
-ploader/
-**/ploader/
-**/ploader/*
+pgloader/
+**/pgloader/
+**/pgloader/*
 
 # Ignore tests
 test/
