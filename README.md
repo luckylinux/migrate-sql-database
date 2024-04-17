@@ -197,7 +197,14 @@ Run the Migration Script after Ensuring a Clean State:
 ./reset.sh; ./migrate.sh
 ```
 
-# Easy Debugging of Networking Issues with the Container
+# Issues due to DNS Name Resolution Failure
+See https://github.com/containers/podman/issues/22407 for my Experience. I lost several Days due to this Problem. It's quite Intermittent and difficult to replicate.
+
+On another Note, be aware that the Default `podman` Network does NOT have DNS Resolution Enabled  !!!
+
+Possible Docker has the same / similar Issues.
+
+# Debugging of Networking Issues with the Container
 In case you experience some Network Communication Failures from one Container to the Other, this Docker Image can prove very useful:
 
 Run with:
@@ -216,7 +223,7 @@ nslookup migration-postgresql-testing
 
 Docker may have similar Issues/Requirements/Features.
 
-# Easy Debugging of PostgreSQL Issues
+# Debugging of PostgreSQL Issues
 In case you want to list the Databases on the other running Container you can for instance do:
 ```
 source .env; podman run --name="psql-test" --net=${CONTAINER_NETWORK} --network-alias "psql-test" --pull missing --replace --restart no ${IMAGE_PSQL} bash -c "psql ${DATABASE_INTERMEDIARY_STRING} -c '\l'"
