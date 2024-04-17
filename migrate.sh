@@ -31,7 +31,7 @@ debug=""
 mkdir -p test
 
 # Create a source folder if not exist
-mkdir -p sourcedata
+mkdir -p ${DATABASE_SOURCE_FILE_COPY_FOLDER}
 
 # Create homeassistant folder if not exist
 mkdir -p homeassistant
@@ -113,7 +113,7 @@ container_destroy "${hcreatetablescontainer}" "--ignore"
 
 # Copy Database Source File to a location accessible by the Container
 # Only Needed if not in this folder or if Volume not mounted within the Container
-cp ${DATABASE_SOURCE_FILE} ${DATABASE_SOURCE_FILE_CONTAINER_PATH}/
+cp ${DATABASE_SOURCE_FILE_REAL_PATH} ${DATABASE_SOURCE_FILE_COPY_FOLDER}/
 
 # Generate SQL Command File to migrate to PostgreSQL
 tee pgloader/intermediary/migrate.sql &>/dev/null << EOF

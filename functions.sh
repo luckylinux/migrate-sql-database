@@ -146,7 +146,7 @@ container_run_migration() {
    local basefolderfullpath=$(realpath --canonicalize-missing "./")
 
    # Get full path of source data folder
-   local sourcedatafullpath=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
+   local sourcedatafullpath=$(dirname ${DATABASE_SOURCE_FILE_COPY_FOLDER})
    sourcedatafullpath=$(realpath --canonicalize-missing ${sourcedatafullpath})
 
 
