@@ -16,10 +16,6 @@ loglevel=${2-"error"}
 # Check Engine
 source $toolpath/engine.sh
 
-# Mount also SourceData inside the Container
-#sourcedata=$(dirname ${DATABASE_SOURCE_FILE_REAL_PATH})
-#sourcedata=$(realpath --canonicalize-missing ${sourcedata})
-
 # Set Delay for Executing Commands to make sure that Networking is Up and Running
 delaycmd="15"
 
@@ -55,29 +51,8 @@ mkdir -p backup/source
 mkdir -p backup/intermediary
 mkdir -p backup/destination
 
-# Generate Networks List for Docker/Podman
-#networkstring=()
-#networkstring=(--net ${CONTAINER_NETWORK})
-#for net in "${CONTAINER_NETWORK[@]}"
-#do
-#    networkstring+=(--net ${net})
-#
-#    # Create Network if Not Exist
-#    $engine network create --ignore $net
-#done
-
 # !! Load Functions AFTER networkstring has been defined !!
 source $toolpath/functions.sh
-
-# Bring Down Containers
-# !! Already done as part of ./reset.sh !!
-#$compose down
-
-# Bring Up Containers
-#$compose up -d
-
-# Wait a bit to make sure that Database is Up and Running
-#sleep 60
 
 #####################################################################################
 ################## SQLITE3 -> PostgreSQL (Intermediary) Conversion ##################
@@ -138,7 +113,7 @@ container_destroy "${hcreatetablescontainer}" "--ignore"
 
 # Copy Database Source File to a location accessible by the Container
 # Only Needed if not in this folder or if Volume not mounted within the Container
-#cp ${DATABASE_SOURCE_FILE} source/
+cp ${DATABASE_SOURCE_FILE} ${DATABASE_SOURCE_FILE_CONTAINER_PATH}/
 
 # Generate SQL Command File to migrate to PostgreSQL
 tee pgloader/intermediary/migrate.sql &>/dev/null << EOF
