@@ -43,3 +43,5 @@ build/
 **/build/
 **/build/*
 
+# Ignore includes from containers-build-tools Library
+includes
